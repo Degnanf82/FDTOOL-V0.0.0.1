@@ -1,0 +1,42 @@
+name: FDTOOL V2 PowerShell checks
+
+on:
+  push:
+    branches:
+      - modernization/v2
+    paths:
+      - "FDTOOL-V2/**"
+      - ".github/workflows/powershell-tests.yml"
+  pull_request:
+    branches:
+      - modernization/v2
+    paths:
+      - "FDTOOL-V2/**"
+
+jobs:
+  powershell:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Parse PowerShell files
+        shell: pwsh
+        run: |
+          $files = @(
+            "FDTOOL-V2/Start-FDTOOL.ps1",
+            "FDTOOL-V2/Modules/DeviceProfiles.ps1",
+            "FDTOOL-V2/Tests/Test-DeviceProfiles.ps1"
+          )
+          foreach ($file in $files) {
+            $tokens = $null
+            $errors = $null
+            [System.Management.Automation.Language.Parser]::ParseFile((Resolve-Path $file), [ref]$tokens, [ref]$errors) | Out-Null
+            if ($errors.Count -gt 0) {
+              $errors | ForEach-Object { Write-Error "$file : $_" }
+              exit 1
+            }
+            Write-Host "Syntax OK: $file"
+          }
+      - name: Run manufacturer profile tests
+        shell: pwsh
+        run: ./FDTOOL-V2/Tests/Test-DeviceProfiles.ps1
