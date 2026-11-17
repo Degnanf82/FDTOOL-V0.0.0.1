@@ -51,4 +51,20 @@ foreach ($name in $invalid) {
     }
 }
 
+
+$recommendationCases = @(
+    @{ Package = "com.samsung.android.app.notes"; Family = "Samsung"; Expected = "Opcional - revisar" },
+    @{ Package = "com.motorola.help"; Family = "Motorola"; Expected = "Opcional - revisar" },
+    @{ Package = "com.xiaomi.mipicks"; Family = "Xiaomi / Redmi / POCO"; Expected = "Opcional - revisar" },
+    @{ Package = "com.android.systemui"; Family = "Samsung"; Expected = "Protegida" },
+    @{ Package = "com.samsung.unknown.service"; Family = "Samsung"; Expected = "No evaluada - conservar" },
+    @{ Package = "com.samsung.android.app.notes"; Family = "Motorola"; Expected = "No evaluada - conservar" }
+)
+foreach ($case in $recommendationCases) {
+    $actual = Get-AppCleanupRecommendation -PackageName $case.Package -ManufacturerFamily $case.Family
+    if ($actual.Status -ne $case.Expected) {
+        throw "Cleanup recommendation mismatch for $($case.Package) / $($case.Family): expected $($case.Expected), got $($actual.Status)"
+    }
+}
+
 Write-Host "Preinstalled app safety tests passed." -ForegroundColor Green
