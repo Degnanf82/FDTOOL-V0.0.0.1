@@ -5,6 +5,18 @@ param()
 $modulePath = Join-Path (Split-Path -Parent $PSScriptRoot) "Modules\PreinstalledApps.ps1"
 . $modulePath
 
+$friendlyCases = @{
+    "com.samsung.android.app.notes" = "Samsung Notes"
+    "com.google.android.apps.photos" = "Google Photos"
+    "com.motorola.help" = "Moto Help"
+}
+foreach ($package in $friendlyCases.Keys) {
+    $actual = Get-AppFriendlyName -PackageName $package
+    if ($actual -ne $friendlyCases[$package]) {
+        throw "Friendly-name mismatch for $package. Expected $($friendlyCases[$package]), got $actual"
+    }
+}
+
 $protected = @(
     "android",
     "com.android.systemui",
