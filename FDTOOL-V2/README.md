@@ -68,6 +68,15 @@ If Windows blocks local scripts, review the file and use an execution policy app
 - Fastboot information is limited to values exposed by the device bootloader.
 - No driver installation or automatic download is performed in this initial release.
 
+## Service procedure catalog (foundation)
+
+The V2 service architecture now includes:
+- `Data/service-procedures.schema.json`: JSON Schema contract for versioned procedures.
+- `Data/service-procedures.json`: initial manual SIM-lock identification workflow.
+- `Docs/Service-Procedure-Catalog.md`: proposed client/server architecture, compatibility matching, update model and safety requirements.
+
+This is a data/catalog foundation, not an automatic SIM unlocker. The initial procedure is diagnostic and manual. ADB/Fastboot do not provide a universal network-unlock command. Future model-specific procedures must be verified against reliable manufacturer/operator documentation. No IMEI, NV/EFS, credential, anti-theft or account-lock bypass operations are part of this design.
+
 ## Planned next steps
 
 1. Add driver and Platform-Tools version checks.
