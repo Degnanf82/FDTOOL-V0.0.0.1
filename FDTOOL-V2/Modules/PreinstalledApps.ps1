@@ -228,6 +228,529 @@ function Get-AdbSystemPackages {
     return @($packages | Sort-Object PackageName -Unique)
 }
 
+function ConvertFrom-AdbPackageInventory {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory=$true)][string[]]$PackageLines,
+        [string[]]$SystemPackages = @(),
+        [string[]]$ThirdPartyPackages = @(),
+        [Parameter(Mandatory=$true)][string]$ManufacturerFamily
+    )
+    $systemLookup = @{}
+    foreach ($name in $SystemPackages) { if ($name) { $systemLookup[$name] = $true } }
+    $thirdPartyLookup = @{}
+    foreach ($name in $ThirdPartyPackages) { if ($name) { $thirdPartyLookup[$name] = $true } }
+    $items = @()
+    foreach ($line in $PackageLines) {
+        $text = "$line".Trim()
+        if ([string]::IsNullOrWhiteSpace($text) -or $text -notmatch '^package:') { continue }
+        $apkPath = ""
+        $packageName = ""
+        $payload = $text.Substring(8)
+        if ($payload -match '^(.*)=([A-Za-z0-9_]+(\.[A-Za-z0-9_]+)+) {
+    param(
+        [Parameter(Mandatory=$true)][string]$AdbPath,
+        [Parameter(Mandatory=$true)][string]$Serial,
+        [Parameter(Mandatory=$true)][string]$OutputDirectory
+    )
+
+    while ($true) {
+        Clear-Host
+        Write-Host ""
+        Write-Host "  FDTOOL V2 | Aplicaciones preinstaladas (sin root)" -ForegroundColor Cyan
+        Write-Host "  ------------------------------------------------" -ForegroundColor DarkCyan
+        Write-Host "  Solo afecta al usuario Android 0. No borra el APK de la partición del sistema." -ForegroundColor Yellow
+        Write-Host ""
+        Write-Host "  1. Listar aplicaciones del sistema (nombre + paquete)"
+        Write-Host "  2. Desinstalar para el usuario actual"
+        Write-Host "  3. Restaurar una aplicación del sistema"
+        Write-Host "  4. Exportar inventario completo (CSV + JSON)"
+        Write-Host "  0. Volver"
+        $action = Read-Host "  Selecciona una opción"
+
+        if ($action -eq "0") { return }
+
+        if ($action -eq "4") {
+            try {
+                $export = Export-AdbAppInventory -AdbPath $AdbPath -Serial $Serial -OutputDirectory $OutputDirectory
+                Write-Host ""
+                Write-Host ("  Inventario exportado: {0} aplicaciones." -f $export.AppCount) -ForegroundColor Green
+                Write-Host ("  CSV:  {0}" -f $export.CsvPath)
+                Write-Host ("  JSON: {0}" -f $export.JsonPath)
+                Write-Host "  El número de serie completo y los datos personales no se incluyen." -ForegroundColor DarkGray
+            }
+            catch {
+                Write-Host "  Error al exportar: $_" -ForegroundColor Red
+            }
+            [void](Read-Host "  Pulsa Enter para continuar")
+            continue
+        }
+
+        if ($action -eq "1" -or $action -eq "2") {
+            try {
+                $packages = @(Get-AdbSystemPackages -AdbPath $AdbPath -Serial $Serial)
+            }
+            catch {
+                Write-Host "  Error: $_" -ForegroundColor Red
+                [void](Read-Host "  Pulsa Enter")
+                continue
+            }
+
+            if ($action -eq "1") {
+                Write-Host ""
+                foreach ($item in $packages) {
+                    $tag = if ($item.Protected) { "[PROTEGIDA]" } else { "[sistema]" }
+                    $color = if ($item.Protected) { "DarkYellow" } else { "Gray" }
+                    $friendlyName = Get-AppFriendlyName -PackageName $item.PackageName
+                    Write-Host ("  {0,-14} {1,-30} {2,-48} {3}" -f $tag, $item.Recommendation.Status, $friendlyName, $item.PackageName) -ForegroundColor $color
+                    if ($item.Recommendation.Status -eq "Opcional - revisar") { Write-Host ("                  Motivo: {0}" -f $item.Recommendation.Reason) -ForegroundColor DarkGray }
+                }
+                Write-Host ""
+                Write-Host ("  Total: {0} aplicaciones del sistema; {1} protegidas por FDTOOL." -f $packages.Count, @($packages | Where-Object Protected).Count)
+                [void](Read-Host "  Pulsa Enter para continuar")
+                continue
+            }
+
+            $removable = @($packages | Where-Object { -not $_.Protected })
+            if ($removable.Count -eq 0) {
+                Write-Host "  No hay paquetes disponibles para esta operación." -ForegroundColor Yellow
+                [void](Read-Host "  Pulsa Enter")
+                continue
+            }
+
+            Write-Host ""
+            Write-Host "  Candidatas: las no protegidas siguen requiriendo revisión individual." -ForegroundColor Yellow
+            for ($i = 0; $i -lt $removable.Count; $i++) {
+                $friendlyName = Get-AppFriendlyName -PackageName $removable[$i].PackageName
+                Write-Host ("  [{0}] [{1}] {2}  ({3})" -f ($i + 1), $removable[$i].Recommendation.Status, $friendlyName, $removable[$i].PackageName)
+            }
+            $choice = Read-Host "  Número de paquete (Enter para cancelar)"
+            if ($choice -notmatch '^\d+$') { continue }
+            $index = [int]$choice - 1
+            if ($index -lt 0 -or $index -ge $removable.Count) {
+                Write-Host "  Selección no válida." -ForegroundColor Yellow
+                [void](Read-Host "  Pulsa Enter")
+                continue
+            }
+
+            $selected = $removable[$index].PackageName
+            Write-Host ""
+            $selectedName = Get-AppFriendlyName -PackageName $selected
+            Write-Host ("  Aplicación: {0}" -f $selectedName) -ForegroundColor Cyan
+            $recommendation = Get-AppCleanupRecommendation -PackageName $selected -ManufacturerFamily (Get-AdbManufacturerFamily -AdbPath $AdbPath -Serial $Serial)
+            Write-Host ("  Evaluación FDTOOL: {0}" -f $recommendation.Status) -ForegroundColor Yellow
+            Write-Host ("  Motivo: {0}" -f $recommendation.Reason) -ForegroundColor DarkGray
+            Write-Host "  ADVERTENCIA: desinstalar una app del sistema puede afectar funciones del teléfono." -ForegroundColor Yellow
+            Write-Host "  La operación se limita al usuario 0 y normalmente puede revertirse."
+            Write-Host "  Para confirmar, escribe exactamente el nombre del paquete:"
+            $confirmation = Read-Host "  $selected"
+            if ($confirmation -cne $selected) {
+                Write-Host "  Operación cancelada." -ForegroundColor DarkYellow
+                [void](Read-Host "  Pulsa Enter")
+                continue
+            }
+
+            $result = @(& $AdbPath -s $Serial shell pm uninstall --user 0 $selected 2>&1)
+            $exitCode = $LASTEXITCODE
+            Write-Host ""
+            if ($exitCode -eq 0 -and (($result -join " ") -match 'Success')) {
+                Write-Host "  Aplicación desinstalada para el usuario 0." -ForegroundColor Green
+                Write-Host "  No se ha borrado el APK de la partición del sistema."
+            }
+            else {
+                Write-Host "  Android no confirmó la operación:" -ForegroundColor Yellow
+                $result | ForEach-Object { Write-Host "  $_" }
+            }
+            [void](Read-Host "  Pulsa Enter para continuar")
+            continue
+        }
+
+        if ($action -eq "3") {
+            $package = Read-Host "  Nombre exacto del paquete a restaurar"
+            if (-not (Test-SafePackageName -PackageName $package)) {
+                Write-Host "  Nombre de paquete no válido." -ForegroundColor Yellow
+                [void](Read-Host "  Pulsa Enter")
+                continue
+            }
+            if (Test-ProtectedPackage -PackageName $package) {
+                Write-Host "  El paquete está protegido por FDTOOL; no se ejecutará ninguna acción." -ForegroundColor Red
+                [void](Read-Host "  Pulsa Enter")
+                continue
+            }
+            $confirm = Read-Host "  Escribe RESTAURAR para volver a habilitar $package para el usuario 0"
+            if ($confirm -cne "RESTAURAR") { continue }
+
+            $result = @(& $AdbPath -s $Serial shell cmd package install-existing --user 0 $package 2>&1)
+            $exitCode = $LASTEXITCODE
+            if ($exitCode -ne 0 -or (($result -join " ") -match 'Unknown command|not installed')) {
+                $result = @(& $AdbPath -s $Serial shell pm install-existing --user 0 $package 2>&1)
+                $exitCode = $LASTEXITCODE
+            }
+            Write-Host ""
+            $result | ForEach-Object { Write-Host "  $_" }
+            if ($exitCode -eq 0) { Write-Host "  Solicitud de restauración completada." -ForegroundColor Green }
+            else { Write-Host "  No se pudo restaurar el paquete." -ForegroundColor Yellow }
+            [void](Read-Host "  Pulsa Enter para continuar")
+            continue
+        }
+
+        Write-Host "  Opción no válida." -ForegroundColor Yellow
+        Start-Sleep -Seconds 1
+    }
+}
+) {
+            $apkPath = $Matches[1]
+            $packageName = $Matches[2]
+        }
+        elseif ($payload -match '^([A-Za-z0-9_]+(\.[A-Za-z0-9_]+)+) {
+    param(
+        [Parameter(Mandatory=$true)][string]$AdbPath,
+        [Parameter(Mandatory=$true)][string]$Serial
+    )
+
+    while ($true) {
+        Clear-Host
+        Write-Host ""
+        Write-Host "  FDTOOL V2 | Aplicaciones preinstaladas (sin root)" -ForegroundColor Cyan
+        Write-Host "  ------------------------------------------------" -ForegroundColor DarkCyan
+        Write-Host "  Solo afecta al usuario Android 0. No borra el APK de la partición del sistema." -ForegroundColor Yellow
+        Write-Host ""
+        Write-Host "  1. Listar aplicaciones del sistema (nombre + paquete)"
+        Write-Host "  2. Desinstalar para el usuario actual"
+        Write-Host "  3. Restaurar una aplicación del sistema"
+        Write-Host "  0. Volver"
+        $action = Read-Host "  Selecciona una opción"
+
+        if ($action -eq "0") { return }
+
+        if ($action -eq "1" -or $action -eq "2") {
+            try {
+                $packages = @(Get-AdbSystemPackages -AdbPath $AdbPath -Serial $Serial)
+            }
+            catch {
+                Write-Host "  Error: $_" -ForegroundColor Red
+                [void](Read-Host "  Pulsa Enter")
+                continue
+            }
+
+            if ($action -eq "1") {
+                Write-Host ""
+                foreach ($item in $packages) {
+                    $tag = if ($item.Protected) { "[PROTEGIDA]" } else { "[sistema]" }
+                    $color = if ($item.Protected) { "DarkYellow" } else { "Gray" }
+                    $friendlyName = Get-AppFriendlyName -PackageName $item.PackageName
+                    Write-Host ("  {0,-14} {1,-30} {2,-48} {3}" -f $tag, $item.Recommendation.Status, $friendlyName, $item.PackageName) -ForegroundColor $color
+                    if ($item.Recommendation.Status -eq "Opcional - revisar") { Write-Host ("                  Motivo: {0}" -f $item.Recommendation.Reason) -ForegroundColor DarkGray }
+                }
+                Write-Host ""
+                Write-Host ("  Total: {0} aplicaciones del sistema; {1} protegidas por FDTOOL." -f $packages.Count, @($packages | Where-Object Protected).Count)
+                [void](Read-Host "  Pulsa Enter para continuar")
+                continue
+            }
+
+            $removable = @($packages | Where-Object { -not $_.Protected })
+            if ($removable.Count -eq 0) {
+                Write-Host "  No hay paquetes disponibles para esta operación." -ForegroundColor Yellow
+                [void](Read-Host "  Pulsa Enter")
+                continue
+            }
+
+            Write-Host ""
+            Write-Host "  Candidatas: las no protegidas siguen requiriendo revisión individual." -ForegroundColor Yellow
+            for ($i = 0; $i -lt $removable.Count; $i++) {
+                $friendlyName = Get-AppFriendlyName -PackageName $removable[$i].PackageName
+                Write-Host ("  [{0}] [{1}] {2}  ({3})" -f ($i + 1), $removable[$i].Recommendation.Status, $friendlyName, $removable[$i].PackageName)
+            }
+            $choice = Read-Host "  Número de paquete (Enter para cancelar)"
+            if ($choice -notmatch '^\d+$') { continue }
+            $index = [int]$choice - 1
+            if ($index -lt 0 -or $index -ge $removable.Count) {
+                Write-Host "  Selección no válida." -ForegroundColor Yellow
+                [void](Read-Host "  Pulsa Enter")
+                continue
+            }
+
+            $selected = $removable[$index].PackageName
+            Write-Host ""
+            $selectedName = Get-AppFriendlyName -PackageName $selected
+            Write-Host ("  Aplicación: {0}" -f $selectedName) -ForegroundColor Cyan
+            $recommendation = Get-AppCleanupRecommendation -PackageName $selected -ManufacturerFamily (Get-AdbManufacturerFamily -AdbPath $AdbPath -Serial $Serial)
+            Write-Host ("  Evaluación FDTOOL: {0}" -f $recommendation.Status) -ForegroundColor Yellow
+            Write-Host ("  Motivo: {0}" -f $recommendation.Reason) -ForegroundColor DarkGray
+            Write-Host "  ADVERTENCIA: desinstalar una app del sistema puede afectar funciones del teléfono." -ForegroundColor Yellow
+            Write-Host "  La operación se limita al usuario 0 y normalmente puede revertirse."
+            Write-Host "  Para confirmar, escribe exactamente el nombre del paquete:"
+            $confirmation = Read-Host "  $selected"
+            if ($confirmation -cne $selected) {
+                Write-Host "  Operación cancelada." -ForegroundColor DarkYellow
+                [void](Read-Host "  Pulsa Enter")
+                continue
+            }
+
+            $result = @(& $AdbPath -s $Serial shell pm uninstall --user 0 $selected 2>&1)
+            $exitCode = $LASTEXITCODE
+            Write-Host ""
+            if ($exitCode -eq 0 -and (($result -join " ") -match 'Success')) {
+                Write-Host "  Aplicación desinstalada para el usuario 0." -ForegroundColor Green
+                Write-Host "  No se ha borrado el APK de la partición del sistema."
+            }
+            else {
+                Write-Host "  Android no confirmó la operación:" -ForegroundColor Yellow
+                $result | ForEach-Object { Write-Host "  $_" }
+            }
+            [void](Read-Host "  Pulsa Enter para continuar")
+            continue
+        }
+
+        if ($action -eq "3") {
+            $package = Read-Host "  Nombre exacto del paquete a restaurar"
+            if (-not (Test-SafePackageName -PackageName $package)) {
+                Write-Host "  Nombre de paquete no válido." -ForegroundColor Yellow
+                [void](Read-Host "  Pulsa Enter")
+                continue
+            }
+            if (Test-ProtectedPackage -PackageName $package) {
+                Write-Host "  El paquete está protegido por FDTOOL; no se ejecutará ninguna acción." -ForegroundColor Red
+                [void](Read-Host "  Pulsa Enter")
+                continue
+            }
+            $confirm = Read-Host "  Escribe RESTAURAR para volver a habilitar $package para el usuario 0"
+            if ($confirm -cne "RESTAURAR") { continue }
+
+            $result = @(& $AdbPath -s $Serial shell cmd package install-existing --user 0 $package 2>&1)
+            $exitCode = $LASTEXITCODE
+            if ($exitCode -ne 0 -or (($result -join " ") -match 'Unknown command|not installed')) {
+                $result = @(& $AdbPath -s $Serial shell pm install-existing --user 0 $package 2>&1)
+                $exitCode = $LASTEXITCODE
+            }
+            Write-Host ""
+            $result | ForEach-Object { Write-Host "  $_" }
+            if ($exitCode -eq 0) { Write-Host "  Solicitud de restauración completada." -ForegroundColor Green }
+            else { Write-Host "  No se pudo restaurar el paquete." -ForegroundColor Yellow }
+            [void](Read-Host "  Pulsa Enter para continuar")
+            continue
+        }
+
+        Write-Host "  Opción no válida." -ForegroundColor Yellow
+        Start-Sleep -Seconds 1
+    }
+}
+) {
+            $packageName = $Matches[1]
+        }
+        if (-not $packageName) { continue }
+        $type = "No determinado"
+        if ($systemLookup.ContainsKey($packageName)) { $type = "Sistema" }
+        elseif ($thirdPartyLookup.ContainsKey($packageName)) { $type = "Usuario" }
+        $recommendation = Get-AppCleanupRecommendation -PackageName $packageName -ManufacturerFamily $ManufacturerFamily
+        $items += [pscustomobject]@{
+            PackageName = $packageName
+            ApkPath = $apkPath
+            AppName = Get-AppFriendlyName -PackageName $packageName
+            Type = $type
+            Recommendation = $recommendation.Status
+            RecommendationReason = $recommendation.Reason
+            ManufacturerFamily = $ManufacturerFamily
+        }
+    }
+    return @($items | Sort-Object PackageName -Unique)
+}
+
+function Get-AdbPackageNamesFromOutput {
+    param([string[]]$Lines)
+    $names = @()
+    foreach ($line in $Lines) {
+        $text = "$line".Trim()
+        if ($text -match '^package:([A-Za-z0-9_]+(\.[A-Za-z0-9_]+)+) {
+    param(
+        [Parameter(Mandatory=$true)][string]$AdbPath,
+        [Parameter(Mandatory=$true)][string]$Serial
+    )
+
+    while ($true) {
+        Clear-Host
+        Write-Host ""
+        Write-Host "  FDTOOL V2 | Aplicaciones preinstaladas (sin root)" -ForegroundColor Cyan
+        Write-Host "  ------------------------------------------------" -ForegroundColor DarkCyan
+        Write-Host "  Solo afecta al usuario Android 0. No borra el APK de la partición del sistema." -ForegroundColor Yellow
+        Write-Host ""
+        Write-Host "  1. Listar aplicaciones del sistema (nombre + paquete)"
+        Write-Host "  2. Desinstalar para el usuario actual"
+        Write-Host "  3. Restaurar una aplicación del sistema"
+        Write-Host "  0. Volver"
+        $action = Read-Host "  Selecciona una opción"
+
+        if ($action -eq "0") { return }
+
+        if ($action -eq "1" -or $action -eq "2") {
+            try {
+                $packages = @(Get-AdbSystemPackages -AdbPath $AdbPath -Serial $Serial)
+            }
+            catch {
+                Write-Host "  Error: $_" -ForegroundColor Red
+                [void](Read-Host "  Pulsa Enter")
+                continue
+            }
+
+            if ($action -eq "1") {
+                Write-Host ""
+                foreach ($item in $packages) {
+                    $tag = if ($item.Protected) { "[PROTEGIDA]" } else { "[sistema]" }
+                    $color = if ($item.Protected) { "DarkYellow" } else { "Gray" }
+                    $friendlyName = Get-AppFriendlyName -PackageName $item.PackageName
+                    Write-Host ("  {0,-14} {1,-30} {2,-48} {3}" -f $tag, $item.Recommendation.Status, $friendlyName, $item.PackageName) -ForegroundColor $color
+                    if ($item.Recommendation.Status -eq "Opcional - revisar") { Write-Host ("                  Motivo: {0}" -f $item.Recommendation.Reason) -ForegroundColor DarkGray }
+                }
+                Write-Host ""
+                Write-Host ("  Total: {0} aplicaciones del sistema; {1} protegidas por FDTOOL." -f $packages.Count, @($packages | Where-Object Protected).Count)
+                [void](Read-Host "  Pulsa Enter para continuar")
+                continue
+            }
+
+            $removable = @($packages | Where-Object { -not $_.Protected })
+            if ($removable.Count -eq 0) {
+                Write-Host "  No hay paquetes disponibles para esta operación." -ForegroundColor Yellow
+                [void](Read-Host "  Pulsa Enter")
+                continue
+            }
+
+            Write-Host ""
+            Write-Host "  Candidatas: las no protegidas siguen requiriendo revisión individual." -ForegroundColor Yellow
+            for ($i = 0; $i -lt $removable.Count; $i++) {
+                $friendlyName = Get-AppFriendlyName -PackageName $removable[$i].PackageName
+                Write-Host ("  [{0}] [{1}] {2}  ({3})" -f ($i + 1), $removable[$i].Recommendation.Status, $friendlyName, $removable[$i].PackageName)
+            }
+            $choice = Read-Host "  Número de paquete (Enter para cancelar)"
+            if ($choice -notmatch '^\d+$') { continue }
+            $index = [int]$choice - 1
+            if ($index -lt 0 -or $index -ge $removable.Count) {
+                Write-Host "  Selección no válida." -ForegroundColor Yellow
+                [void](Read-Host "  Pulsa Enter")
+                continue
+            }
+
+            $selected = $removable[$index].PackageName
+            Write-Host ""
+            $selectedName = Get-AppFriendlyName -PackageName $selected
+            Write-Host ("  Aplicación: {0}" -f $selectedName) -ForegroundColor Cyan
+            $recommendation = Get-AppCleanupRecommendation -PackageName $selected -ManufacturerFamily (Get-AdbManufacturerFamily -AdbPath $AdbPath -Serial $Serial)
+            Write-Host ("  Evaluación FDTOOL: {0}" -f $recommendation.Status) -ForegroundColor Yellow
+            Write-Host ("  Motivo: {0}" -f $recommendation.Reason) -ForegroundColor DarkGray
+            Write-Host "  ADVERTENCIA: desinstalar una app del sistema puede afectar funciones del teléfono." -ForegroundColor Yellow
+            Write-Host "  La operación se limita al usuario 0 y normalmente puede revertirse."
+            Write-Host "  Para confirmar, escribe exactamente el nombre del paquete:"
+            $confirmation = Read-Host "  $selected"
+            if ($confirmation -cne $selected) {
+                Write-Host "  Operación cancelada." -ForegroundColor DarkYellow
+                [void](Read-Host "  Pulsa Enter")
+                continue
+            }
+
+            $result = @(& $AdbPath -s $Serial shell pm uninstall --user 0 $selected 2>&1)
+            $exitCode = $LASTEXITCODE
+            Write-Host ""
+            if ($exitCode -eq 0 -and (($result -join " ") -match 'Success')) {
+                Write-Host "  Aplicación desinstalada para el usuario 0." -ForegroundColor Green
+                Write-Host "  No se ha borrado el APK de la partición del sistema."
+            }
+            else {
+                Write-Host "  Android no confirmó la operación:" -ForegroundColor Yellow
+                $result | ForEach-Object { Write-Host "  $_" }
+            }
+            [void](Read-Host "  Pulsa Enter para continuar")
+            continue
+        }
+
+        if ($action -eq "3") {
+            $package = Read-Host "  Nombre exacto del paquete a restaurar"
+            if (-not (Test-SafePackageName -PackageName $package)) {
+                Write-Host "  Nombre de paquete no válido." -ForegroundColor Yellow
+                [void](Read-Host "  Pulsa Enter")
+                continue
+            }
+            if (Test-ProtectedPackage -PackageName $package) {
+                Write-Host "  El paquete está protegido por FDTOOL; no se ejecutará ninguna acción." -ForegroundColor Red
+                [void](Read-Host "  Pulsa Enter")
+                continue
+            }
+            $confirm = Read-Host "  Escribe RESTAURAR para volver a habilitar $package para el usuario 0"
+            if ($confirm -cne "RESTAURAR") { continue }
+
+            $result = @(& $AdbPath -s $Serial shell cmd package install-existing --user 0 $package 2>&1)
+            $exitCode = $LASTEXITCODE
+            if ($exitCode -ne 0 -or (($result -join " ") -match 'Unknown command|not installed')) {
+                $result = @(& $AdbPath -s $Serial shell pm install-existing --user 0 $package 2>&1)
+                $exitCode = $LASTEXITCODE
+            }
+            Write-Host ""
+            $result | ForEach-Object { Write-Host "  $_" }
+            if ($exitCode -eq 0) { Write-Host "  Solicitud de restauración completada." -ForegroundColor Green }
+            else { Write-Host "  No se pudo restaurar el paquete." -ForegroundColor Yellow }
+            [void](Read-Host "  Pulsa Enter para continuar")
+            continue
+        }
+
+        Write-Host "  Opción no válida." -ForegroundColor Yellow
+        Start-Sleep -Seconds 1
+    }
+}
+) { $names += $Matches[1] }
+    }
+    return @($names | Sort-Object -Unique)
+}
+
+function Export-AdbAppInventory {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory=$true)][string]$AdbPath,
+        [Parameter(Mandatory=$true)][string]$Serial,
+        [Parameter(Mandatory=$true)][string]$OutputDirectory
+    )
+    $allOutput = @(& $AdbPath -s $Serial shell pm list packages -f 2>&1)
+    $allExit = $LASTEXITCODE
+    if ($allExit -ne 0) { throw "No se pudo obtener el inventario ADB: $($allOutput -join ' ')" }
+    $systemOutput = @(& $AdbPath -s $Serial shell pm list packages -s 2>&1)
+    $systemExit = $LASTEXITCODE
+    if ($systemExit -ne 0) { throw "No se pudo clasificar las aplicaciones del sistema: $($systemOutput -join ' ')" }
+    $thirdPartyOutput = @(& $AdbPath -s $Serial shell pm list packages -3 2>&1)
+    $thirdPartyExit = $LASTEXITCODE
+    if ($thirdPartyExit -ne 0) { throw "No se pudo clasificar las aplicaciones de usuario: $($thirdPartyOutput -join ' ')" }
+
+    $manufacturer = @(& $AdbPath -s $Serial shell getprop ro.product.manufacturer 2>&1) -join ""
+    $brand = @(& $AdbPath -s $Serial shell getprop ro.product.brand 2>&1) -join ""
+    $model = @(& $AdbPath -s $Serial shell getprop ro.product.model 2>&1) -join ""
+    $android = @(& $AdbPath -s $Serial shell getprop ro.build.version.release 2>&1) -join ""
+    $manufacturerFamily = Get-AdbManufacturerFamily -AdbPath $AdbPath -Serial $Serial
+    $serialMasked = if ($Serial.Length -le 4) { "*" * $Serial.Length } else { ("*" * ($Serial.Length - 4)) + $Serial.Substring($Serial.Length - 4) }
+
+    $apps = @(ConvertFrom-AdbPackageInventory -PackageLines $allOutput -SystemPackages (Get-AdbPackageNamesFromOutput -Lines $systemOutput) -ThirdPartyPackages (Get-AdbPackageNamesFromOutput -Lines $thirdPartyOutput) -ManufacturerFamily $manufacturerFamily)
+    if ($apps.Count -eq 0) { throw "ADB no devolvió paquetes reconocibles; no se generó ningún archivo." }
+    if (-not (Test-Path -LiteralPath $OutputDirectory -PathType Container)) {
+        New-Item -ItemType Directory -Path $OutputDirectory -Force | Out-Null
+    }
+    $stamp = Get-Date -Format "yyyyMMdd-HHmmss"
+    $baseName = "FDTOOL-AppInventory-$stamp"
+    $csvPath = Join-Path $OutputDirectory ($baseName + ".csv")
+    $jsonPath = Join-Path $OutputDirectory ($baseName + ".json")
+    $metadata = [ordered]@{
+        Application = "FDTOOL V2"
+        ExportDate = (Get-Date).ToString("yyyy-MM-ddTHH:mm:ssK")
+        Manufacturer = $manufacturer.Trim()
+        Brand = $brand.Trim()
+        ManufacturerFamily = $manufacturerFamily
+        Model = $model.Trim()
+        AndroidVersion = $android.Trim()
+        SerialMasked = $serialMasked
+        AppCount = $apps.Count
+        Privacy = "No app data, contacts, messages, account credentials or full serial number collected."
+        Apps = @($apps)
+    }
+    $apps | Select-Object PackageName, AppName, Type, ApkPath, Recommendation, RecommendationReason, ManufacturerFamily |
+        Export-Csv -LiteralPath $csvPath -NoTypeInformation -Encoding UTF8
+    $metadata | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath $jsonPath -Encoding UTF8
+    return [pscustomobject]@{ CsvPath = $csvPath; JsonPath = $jsonPath; AppCount = $apps.Count; Manufacturer = $manufacturer.Trim(); Model = $model.Trim() }
+}
+
 function Invoke-PreinstalledAppManager {
     param(
         [Parameter(Mandatory=$true)][string]$AdbPath,
