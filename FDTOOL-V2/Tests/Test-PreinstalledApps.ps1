@@ -67,4 +67,20 @@ foreach ($case in $recommendationCases) {
     }
 }
 
+
+$inventoryLines = @(
+    "package:/system/priv-app/Settings/Settings.apk=com.android.settings",
+    "package:/data/app/~~random/base.apk=com.samsung.android.app.notes",
+    "package:com.google.android.apps.photos",
+    "  not-a-package-line"
+)
+$inventory = @(ConvertFrom-AdbPackageInventory -PackageLines $inventoryLines -SystemPackages @("com.android.settings") -ThirdPartyPackages @("com.samsung.android.app.notes", "com.google.android.apps.photos") -ManufacturerFamily "Samsung")
+if ($inventory.Count -ne 3) { throw "Expected 3 parsed inventory packages, got $($inventory.Count)" }
+$settings = $inventory | Where-Object PackageName -eq "com.android.settings"
+if ($settings.Type -ne "Sistema" -or $settings.ApkPath -notmatch "/system/") { throw "System package parsing/classification failed." }
+$notes = $inventory | Where-Object PackageName -eq "com.samsung.android.app.notes"
+if ($notes.Type -ne "Usuario" -or $notes.AppName -ne "Samsung Notes") { throw "Third-party package parsing/classification failed." }
+$photos = $inventory | Where-Object PackageName -eq "com.google.android.apps.photos"
+if ($photos.Type -ne "Usuario") { throw "Package line without APK path should still parse and classify." }
+
 Write-Host "Preinstalled app safety tests passed." -ForegroundColor Green
