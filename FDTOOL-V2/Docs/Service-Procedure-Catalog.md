@@ -44,3 +44,15 @@ El servidor debe publicar un JSON validado contra el esquema. Para producción:
 ## Estado actual
 
 Esta entrega define el contrato de datos y un flujo inicial de diagnóstico manual. **No hay todavía servidor desplegado ni desbloqueo SIM automático**. La integración cliente/servidor y la verificación criptográfica quedan para la siguiente fase.
+
+## Motor de compatibilidad local (V2)
+
+El módulo `Modules/ServiceProcedures.ps1` carga el catálogo JSON y valida campos mínimos, estado, pasos y fuente. El matcher devuelve:
+- `family-match`: solo coincide la familia; exige revisión manual.
+- `exact-model-match`: coinciden modelo o codename y las restricciones de Android declaradas.
+- `no-match`: fabricante, modelo o Android no coincide.
+- `review-required`: faltan datos necesarios para decidir.
+
+El navegador del menú solo presenta datos; nunca ejecuta instrucciones del catálogo. La automatización permanece deshabilitada para procedimientos `limited`, `research` o `deprecated`, y no se habilita automáticamente por cambiar una etiqueta: cada operación futura necesita implementación local, revisión de seguridad y confirmación explícita.
+
+Pruebas: `Tests/Test-ServiceProcedures.ps1`.
