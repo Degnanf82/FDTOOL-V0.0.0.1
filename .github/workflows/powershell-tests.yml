@@ -25,7 +25,9 @@ jobs:
           $files = @(
             "FDTOOL-V2/Start-FDTOOL.ps1",
             "FDTOOL-V2/Modules/DeviceProfiles.ps1",
-            "FDTOOL-V2/Tests/Test-DeviceProfiles.ps1"
+            "FDTOOL-V2/Modules/PreinstalledApps.ps1",
+            "FDTOOL-V2/Tests/Test-DeviceProfiles.ps1",
+            "FDTOOL-V2/Tests/Test-PreinstalledApps.ps1"
           )
           foreach ($file in $files) {
             $tokens = $null
@@ -40,3 +42,6 @@ jobs:
       - name: Run manufacturer profile tests
         shell: pwsh
         run: ./FDTOOL-V2/Tests/Test-DeviceProfiles.ps1
+      - name: Run preinstalled app safety tests
+        shell: pwsh
+        run: ./FDTOOL-V2/Tests/Test-PreinstalledApps.ps1
