@@ -44,6 +44,15 @@ The local name catalog currently covers common Samsung, Google, Motorola, Xiaomi
 powershell.exe -NoProfile -File .\Tests\Test-PreinstalledApps.ps1
 ```
 
+
+## Exportable application inventory
+
+From the preinstalled-app manager, option 4 performs a **read-only** inventory using Android Package Manager over authorized ADB. It exports:
+- CSV with package ID, mapped display name, system/user classification, APK path, conservative cleanup hint and manufacturer family.
+- JSON with the same app records plus manufacturer, brand, model, Android version and masked serial number.
+
+Files are saved under `reports/`. The export does not uninstall, disable, modify or read application data. Unknown package names remain unmapped and classification is marked as undetermined if Android does not return it in either system or third-party lists. Review reports before sharing; APK paths and device model may reveal device configuration.
+
 ## Requirements
 
 - Windows 10 or Windows 11.
