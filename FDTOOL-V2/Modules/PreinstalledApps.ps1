@@ -1,6 +1,74 @@
 # FDTOOL V2 - Non-root preinstalled app manager
 # Uses Android Package Manager through authorized ADB. No root, no system partition writes.
 
+function Get-AppFriendlyName {
+    param([Parameter(Mandatory=$true)][string]$PackageName)
+
+    $catalog = @{
+        "com.samsung.android.app.notes" = "Samsung Notes"
+        "com.samsung.android.app.spage" = "Samsung Free / Samsung Daily"
+        "com.samsung.android.bixby.agent" = "Bixby"
+        "com.samsung.android.bixby.service" = "Bixby Voice Service"
+        "com.samsung.android.visionintelligence" = "Bixby Vision"
+        "com.samsung.android.game.gamehome" = "Game Launcher"
+        "com.samsung.android.game.gametools" = "Game Booster"
+        "com.samsung.android.email.provider" = "Samsung Email"
+        "com.samsung.android.calendar" = "Samsung Calendar"
+        "com.samsung.android.voc" = "Samsung Members"
+        "com.samsung.android.oneconnect" = "SmartThings"
+        "com.samsung.android.kidsinstaller" = "Samsung Kids"
+        "com.sec.android.app.sbrowser" = "Samsung Internet"
+        "com.sec.android.easyMover" = "Samsung Smart Switch"
+        "com.google.android.apps.photos" = "Google Photos"
+        "com.google.android.youtube" = "YouTube"
+        "com.google.android.apps.maps" = "Google Maps"
+        "com.google.android.apps.tachyon" = "Google Meet"
+        "com.google.android.apps.docs" = "Google Drive"
+        "com.google.android.gm" = "Gmail"
+        "com.google.android.music" = "YouTube Music (legacy package)"
+        "com.google.android.videos" = "Google TV / Play Movies"
+        "com.google.android.apps.wellbeing" = "Digital Wellbeing"
+        "com.google.android.apps.tips" = "Pixel Tips"
+        "com.google.android.apps.walletnfcrel" = "Google Wallet"
+        "com.google.android.apps.chromecast.app" = "Google Home"
+        "com.google.android.apps.subscriptions.red" = "Google One"
+        "com.motorola.help" = "Moto Help"
+        "com.motorola.moto" = "Moto App"
+        "com.motorola.launcher3" = "Moto Launcher"
+        "com.motorola.ccc.ota" = "Motorola System Updates"
+        "com.miui.player" = "Xiaomi Music"
+        "com.miui.videoplayer" = "Xiaomi Video"
+        "com.miui.weather2" = "Xiaomi Weather"
+        "com.miui.notes" = "Xiaomi Notes"
+        "com.miui.analytics" = "MIUI Analytics"
+        "com.xiaomi.mipicks" = "GetApps"
+        "com.xiaomi.midrop" = "ShareMe"
+        "com.oplus.games" = "OPPO / OnePlus Games"
+        "com.coloros.video" = "OPPO Video"
+        "com.coloros.gallery3d" = "OPPO Photos"
+        "com.heytap.market" = "App Market"
+        "com.heytap.browser" = "OPPO Browser"
+        "com.facebook.katana" = "Facebook"
+        "com.facebook.services" = "Facebook Services"
+        "com.facebook.system" = "Facebook App Manager"
+        "com.spotify.music" = "Spotify"
+        "com.netflix.mediaclient" = "Netflix"
+        "com.microsoft.office.officehubrow" = "Microsoft 365"
+        "com.linkedin.android" = "LinkedIn"
+        "com.amazon.mShop.android.shopping" = "Amazon Shopping"
+    }
+
+    if ($catalog.ContainsKey($PackageName)) { return $catalog[$PackageName] }
+
+    if ($PackageName -match '^com\.samsung\.') { return "Samsung app (name not mapped)" }
+    if ($PackageName -match '^com\.motorola\.') { return "Motorola app (name not mapped)" }
+    if ($PackageName -match '^com\.miui\.|^com\.xiaomi\.') { return "Xiaomi app (name not mapped)" }
+    if ($PackageName -match '^com\.google\.') { return "Google app (name not mapped)" }
+    if ($PackageName -match '^com\.coloros\.|^com\.heytap\.|^com\.oplus\.') { return "OPPO / OnePlus app (name not mapped)" }
+
+    return "Name not mapped"
+}
+
 function Test-SafePackageName {
     param([Parameter(Mandatory=$true)][AllowEmptyString()][string]$PackageName)
     return ($PackageName -match '^[A-Za-z0-9_]+(\.[A-Za-z0-9_]+)+$')
@@ -108,7 +176,7 @@ function Invoke-PreinstalledAppManager {
         Write-Host "  ------------------------------------------------" -ForegroundColor DarkCyan
         Write-Host "  Solo afecta al usuario Android 0. No borra el APK de la partición del sistema." -ForegroundColor Yellow
         Write-Host ""
-        Write-Host "  1. Listar aplicaciones del sistema"
+        Write-Host "  1. Listar aplicaciones del sistema (nombre + paquete)"
         Write-Host "  2. Desinstalar para el usuario actual"
         Write-Host "  3. Restaurar una aplicación del sistema"
         Write-Host "  0. Volver"
@@ -131,7 +199,8 @@ function Invoke-PreinstalledAppManager {
                 foreach ($item in $packages) {
                     $tag = if ($item.Protected) { "[PROTEGIDA]" } else { "[sistema]" }
                     $color = if ($item.Protected) { "DarkYellow" } else { "Gray" }
-                    Write-Host ("  {0,-14} {1}" -f $tag, $item.PackageName) -ForegroundColor $color
+                    $friendlyName = Get-AppFriendlyName -PackageName $item.PackageName
+                    Write-Host ("  {0,-14} {1,-34} {2}" -f $tag, $friendlyName, $item.PackageName) -ForegroundColor $color
                 }
                 Write-Host ""
                 Write-Host ("  Total: {0} aplicaciones del sistema; {1} protegidas por FDTOOL." -f $packages.Count, @($packages | Where-Object Protected).Count)
@@ -149,7 +218,8 @@ function Invoke-PreinstalledAppManager {
             Write-Host ""
             Write-Host "  Aplicaciones candidatas (la compatibilidad depende del fabricante):" -ForegroundColor Yellow
             for ($i = 0; $i -lt $removable.Count; $i++) {
-                Write-Host ("  [{0}] {1}" -f ($i + 1), $removable[$i].PackageName)
+                $friendlyName = Get-AppFriendlyName -PackageName $removable[$i].PackageName
+                Write-Host ("  [{0}] {1}  ({2})" -f ($i + 1), $friendlyName, $removable[$i].PackageName)
             }
             $choice = Read-Host "  Número de paquete (Enter para cancelar)"
             if ($choice -notmatch '^\d+$') { continue }
@@ -162,6 +232,8 @@ function Invoke-PreinstalledAppManager {
 
             $selected = $removable[$index].PackageName
             Write-Host ""
+            $selectedName = Get-AppFriendlyName -PackageName $selected
+            Write-Host ("  Aplicación: {0}" -f $selectedName) -ForegroundColor Cyan
             Write-Host "  ADVERTENCIA: desinstalar una app del sistema puede afectar funciones del teléfono." -ForegroundColor Yellow
             Write-Host "  La operación se limita al usuario 0 y normalmente puede revertirse."
             Write-Host "  Para confirmar, escribe exactamente el nombre del paquete:"
