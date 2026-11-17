@@ -166,6 +166,79 @@ function Show-Scan {
     [void](Read-Host "  Pulsa Enter para continuar")
 }
 
+function Protect-Serial {
+    param([string]$Serial)
+    if ([string]::IsNullOrWhiteSpace($Serial)) { return "No disponible" }
+    if ($Serial.Length -le 4) { return ("*" * $Serial.Length) }
+    return (("*" * ($Serial.Length - 4)) + $Serial.Substring($Serial.Length - 4))
+}
+
+function New-DiagnosticReport {
+    Write-Title
+    Write-Host "  Generando informe de diagnóstico..." -ForegroundColor Yellow
+
+    $adbDevices = @(Get-AdbDevices)
+    $fastbootDevices = @(Get-FastbootDevices)
+    $deviceReports = @()
+
+    foreach ($device in (@($adbDevices) + @($fastbootDevices))) {
+        $entry = [ordered]@{
+            Mode = $device.Mode
+            State = $device.State
+            SerialMasked = Protect-Serial -Serial $device.Serial
+            Details = $device.Details
+        }
+
+        if ($device.Mode -eq "ADB" -and $device.State -eq "device") {
+            $entry.Manufacturer = Get-AdbProperty -Serial $device.Serial -Property "ro.product.manufacturer"
+            $entry.Brand = Get-AdbProperty -Serial $device.Serial -Property "ro.product.brand"
+            $entry.Model = Get-AdbProperty -Serial $device.Serial -Property "ro.product.model"
+            $entry.Device = Get-AdbProperty -Serial $device.Serial -Property "ro.product.device"
+            $entry.AndroidVersion = Get-AdbProperty -Serial $device.Serial -Property "ro.build.version.release"
+            $entry.SDK = Get-AdbProperty -Serial $device.Serial -Property "ro.build.version.sdk"
+            $entry.BuildFingerprint = Get-AdbProperty -Serial $device.Serial -Property "ro.build.fingerprint"
+        }
+        elseif ($device.Mode -eq "Fastboot") {
+            $productResult = Invoke-ExternalTool -Executable $script:Fastboot -Arguments @("-s", $device.Serial, "getvar", "product")
+            $productLine = $productResult.Output | Where-Object { $_ -match 'product:' } | Select-Object -First 1
+            $entry.Product = if ($productLine) { $productLine.Trim() } else { "Not reported" }
+        }
+        $deviceReports += [pscustomobject]$entry
+    }
+
+    $windows = Get-CimInstance -ClassName Win32_OperatingSystem -ErrorAction SilentlyContinue
+    $adbVersion = if ($script:Adb) { (Invoke-ExternalTool -Executable $script:Adb -Arguments @("version")).Output -join " " } else { "Not found" }
+    $fastbootVersion = if ($script:Fastboot) { (Invoke-ExternalTool -Executable $script:Fastboot -Arguments @("--version")).Output -join " " } else { "Not found" }
+
+    $report = [pscustomobject]@{
+        Application = "FDTOOL V2"
+        ReportDate = (Get-Date).ToString("yyyy-MM-ddTHH:mm:ssK")
+        Computer = $env:COMPUTERNAME
+        Windows = if ($windows) { "$($windows.Caption) ($($windows.Version))" } else { [System.Environment]::OSVersion.VersionString }
+        PowerShell = $PSVersionTable.PSVersion.ToString()
+        ADB = $adbVersion
+        Fastboot = $fastbootVersion
+        DeviceCount = $deviceReports.Count
+        Devices = @($deviceReports)
+        Privacy = "Serial numbers masked by default. No personal files or account data collected."
+    }
+
+    $reportDirectory = Join-Path $script:Root "reports"
+    if (-not (Test-Path -LiteralPath $reportDirectory)) {
+        New-Item -ItemType Directory -Path $reportDirectory -Force | Out-Null
+    }
+    $fileName = "FDTOOL-Diagnostic-{0}.json" -f (Get-Date -Format "yyyyMMdd-HHmmss")
+    $reportPath = Join-Path $reportDirectory $fileName
+    $report | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath $reportPath -Encoding UTF8
+
+    Write-Host ""
+    Write-Host "  Informe guardado:" -ForegroundColor Green
+    Write-Host "  $reportPath"
+    Write-Host "  Identificadores de serie enmascarados." -ForegroundColor Green
+    Write-Host ""
+    [void](Read-Host "  Pulsa Enter para continuar")
+}
+
 $script:Adb = Resolve-Tool -Name "adb"
 $script:Fastboot = Resolve-Tool -Name "fastboot"
 
