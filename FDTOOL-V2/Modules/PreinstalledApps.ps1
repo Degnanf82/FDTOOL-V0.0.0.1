@@ -53,6 +53,22 @@ function Test-ProtectedPackage {
     return $false
 }
 
+function Get-AdbHomeLauncherPackage {
+    param(
+        [Parameter(Mandatory=$true)][string]$AdbPath,
+        [Parameter(Mandatory=$true)][string]$Serial
+    )
+
+    $output = @(& $AdbPath -s $Serial shell cmd package resolve-activity --brief -a android.intent.action.MAIN -c android.intent.category.HOME 2>&1)
+    if ($LASTEXITCODE -ne 0) { return "" }
+
+    foreach ($line in $output) {
+        $text = "$line".Trim()
+        if ($text -match '^([A-Za-z0-9_.]+)/') { return $Matches[1] }
+    }
+    return ""
+}
+
 function Get-AdbSystemPackages {
     param(
         [Parameter(Mandatory=$true)][string]$AdbPath,
@@ -64,6 +80,7 @@ function Get-AdbSystemPackages {
         throw "No se pudo consultar la lista de aplicaciones del sistema: $($output -join ' ')"
     }
 
+    $homeLauncher = Get-AdbHomeLauncherPackage -AdbPath $AdbPath -Serial $Serial
     $packages = @()
     foreach ($line in $output) {
         $text = "$line".Trim()
@@ -71,7 +88,7 @@ function Get-AdbSystemPackages {
             $name = $Matches[1]
             $packages += [pscustomobject]@{
                 PackageName = $name
-                Protected = (Test-ProtectedPackage -PackageName $name)
+                Protected = ((Test-ProtectedPackage -PackageName $name) -or ($homeLauncher -and $name -eq $homeLauncher))
             }
         }
     }
