@@ -12,7 +12,7 @@ function Get-ManufacturerProfile {
 
     $identity = (@($Manufacturer, $Brand, $Model, $Product) -join " ").ToLowerInvariant()
     $family = "Other / Unknown"
-    $brandName = if (-not [string]::IsNullOrWhiteSpace($Brand)) { $Brand.Trim() } else { $Manufacturer.Trim() }
+    $brandName = "Unknown"\n    if (-not [string]::IsNullOrWhiteSpace($Brand)) { $brandName = $Brand.Trim() }\n    elseif (-not [string]::IsNullOrWhiteSpace($Manufacturer)) { $brandName = $Manufacturer.Trim() }
     $notes = "No manufacturer-specific workflow is enabled yet. Use read-only diagnostics and verify the exact model before any maintenance."
 
     switch -Regex ($identity) {
