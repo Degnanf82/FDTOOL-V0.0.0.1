@@ -2,7 +2,7 @@
 # Uses Android Package Manager through authorized ADB. No root, no system partition writes.
 
 function Test-SafePackageName {
-    param([Parameter(Mandatory=$true)][string]$PackageName)
+    param([Parameter(Mandatory=$true)][AllowEmptyString()][string]$PackageName)
     return ($PackageName -match '^[A-Za-z0-9_]+(\.[A-Za-z0-9_]+)+$')
 }
 
@@ -19,6 +19,12 @@ function Test-ProtectedPackage {
         "com.android.providers.telephony",
         "com.android.providers.contacts",
         "com.android.providers.media",
+        "com.android.providers.downloads",
+        "com.android.documentsui",
+        "com.android.permissioncontroller",
+        "com.android.bluetooth",
+        "com.android.nfc",
+        "com.android.launcher3",
         "com.android.packageinstaller",
         "com.google.android.gms",
         "com.google.android.gsf",
