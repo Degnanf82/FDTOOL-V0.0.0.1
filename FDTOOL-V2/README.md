@@ -32,12 +32,13 @@ Important limitations and safeguards:
 - This does **not** remove the APK from the read-only system image or free the full system-partition space.
 - ADB USB debugging must be enabled and authorized on the phone.
 - The package list shows a friendly name when FDTOOL has a verified local mapping, alongside the exact technical package ID. Unknown names remain explicitly marked as unmapped; FDTOOL does not guess the app name.\n- The user must select one package and type its full package name to confirm each uninstall.
+- Samsung, Motorola and Xiaomi-family packages receive conservative review hints: `Opcional - revisar`, `Protegida`, or `No evaluada - conservar`. These are not universal safety guarantees; unknown packages default to keeping them.
 - FDTOOL blocks a list of core Android/Google packages and critical provider/system services, and detects/protects the active home launcher when Android reports it.
 - OEM-specific dependencies may still exist. Removing a non-blocked package can break features; review the package name before proceeding.
 - Restoration only works if the package remains available in the device's system image.
 - No batch uninstall, root, bootloader unlock, FRP bypass or system-partition modification is provided.
 
-The local name catalog currently covers common Samsung, Google, Motorola, Xiaomi, OPPO/OnePlus and popular third-party packages. It is intentionally conservative; names can vary by region, Android version and OEM build.\n\nSafety tests:
+The local name catalog currently covers common Samsung, Google, Motorola, Xiaomi, OPPO/OnePlus and popular third-party packages. Cleanup hints currently cover a small, conservative subset of Samsung, Motorola and Xiaomi-family packages. It is intentionally conservative; names can vary by region, Android version and OEM build.\n\nSafety tests:
 
 ```powershell
 powershell.exe -NoProfile -File .\Tests\Test-PreinstalledApps.ps1
@@ -69,10 +70,9 @@ If Windows blocks local scripts, review the file and use an execution policy app
 
 ## Planned next steps
 
-1. Add structured diagnostic reports with sensitive identifiers masked by default.
-2. Add driver and Platform-Tools version checks.
-3. Add manufacturer-specific diagnostic modules.
-4. Add verified, user-confirmed maintenance workflows with explicit warnings and compatibility checks.
+1. Add driver and Platform-Tools version checks.
+2. Expand manufacturer-specific diagnostic profiles after compatibility review.
+3. Add verified, user-confirmed maintenance workflows with explicit warnings and compatibility checks.
 
 ## Diagnostic report privacy
 
