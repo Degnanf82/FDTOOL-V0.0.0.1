@@ -1,5 +1,5 @@
 # FDTOOL V2 - Manufacturer and device-family identification
-# Identification is heuristic and based only on properties exposed by Android/bootloader.
+# Heuristic only: never treat family identification as model/firmware compatibility.
 
 function Get-ManufacturerProfile {
     [CmdletBinding()]
@@ -7,95 +7,87 @@ function Get-ManufacturerProfile {
         [string]$Manufacturer,
         [string]$Brand,
         [string]$Model,
-        [string]$Product
+        [string]$Product,
+        [string]$Device,
+        [string]$AndroidVersion,
+        [string]$SDK,
+        [string]$BuildFingerprint
     )
 
-    $identity = (@($Manufacturer, $Brand, $Model, $Product) -join " ").ToLowerInvariant()
+    $signals = @(
+        @{ Value=$Manufacturer; Field="manufacturer" },
+        @{ Value=$Brand; Field="brand" },
+        @{ Value=$Model; Field="model" },
+        @{ Value=$Product; Field="product" },
+        @{ Value=$Device; Field="device" },
+        @{ Value=$BuildFingerprint; Field="buildFingerprint" }
+    ) | Where-Object { -not [string]::IsNullOrWhiteSpace($_.Value) }
+    $identity = (($signals | ForEach-Object { $_.Value }) -join " ").ToLowerInvariant()
     $family = "Other / Unknown"
+    $matchedBy = @()
     $brandName = "Unknown"
     if (-not [string]::IsNullOrWhiteSpace($Brand)) { $brandName = $Brand.Trim() }
     elseif (-not [string]::IsNullOrWhiteSpace($Manufacturer)) { $brandName = $Manufacturer.Trim() }
-    $notes = "No manufacturer-specific workflow is enabled yet. Use read-only diagnostics and verify the exact model before any maintenance."
 
-    switch -Regex ($identity) {
-        "samsung|galaxy|sm-[a-z0-9]" {
-            $family = "Samsung"
-            $notes = "Samsung device detected. Use official Samsung firmware and drivers for the exact model/region. Odin/Download Mode operations are not part of this diagnostic module."
-            break
-        }
-        "motorola|moto |motorola" {
-            $family = "Motorola"
-            $notes = "Motorola device detected. Confirm the exact model and software channel before consulting official recovery resources."
-            break
-        }
-        "xiaomi|redmi|poco" {
-            $family = "Xiaomi / Redmi / POCO"
-            $notes = "Xiaomi-family device detected. Verify the codename, regional variant and bootloader state; do not assume firmware packages are interchangeable."
-            break
-        }
-        "huawei|honor" {
-            $family = "Huawei / HONOR"
-            $notes = "Huawei/HONOR device detected. Confirm model suffix and region; use manufacturer-supported recovery resources where available."
-            break
-        }
-        "oppo|realme|oneplus" {
-            $family = "OPPO / realme / OnePlus"
-            $notes = "OPPO-family device detected. Confirm model and region because firmware and service procedures can differ between variants."
-            break
-        }
-        "vivo|iqoo" {
-            $family = "vivo / iQOO"
-            $notes = "vivo-family device detected. Confirm the exact regional model before using any service or firmware package."
-            break
-        }
-        "google|pixel" {
-            $family = "Google Pixel"
-            $notes = "Google Pixel detected. Prefer official Google factory images and Android Flash Tool documentation for supported models."
-            break
-        }
-        "sony|xperia" {
-            $family = "Sony"
-            $notes = "Sony Xperia detected. Confirm the exact model variant and use official Sony support resources."
-            break
-        }
-        "nokia|hmd" {
-            $family = "Nokia / HMD"
-            $notes = "Nokia/HMD device detected. Confirm product code and region before any recovery procedure."
-            break
-        }
-        "tecno|infinix|itel" {
-            $family = "Transsion (TECNO / Infinix / itel)"
-            $notes = "Transsion-family device detected. Confirm exact model and board variant; similarly named devices may use different firmware."
-            break
-        }
-        "asus|rog phone" {
-            $family = "ASUS"
-            $notes = "ASUS device detected. Confirm exact model and region using ASUS support documentation."
-            break
-        }
-        "lenovo|legion" {
-            $family = "Lenovo"
-            $notes = "Lenovo device detected. Confirm model and region before consulting official firmware or support resources."
-            break
-        }
-        "zte|nubia|redmagic" {
-            $family = "ZTE / nubia"
-            $notes = "ZTE-family device detected. Confirm exact model and regional variant before maintenance."
-            break
-        }
-        "nothing" {
-            $family = "Nothing"
-            $notes = "Nothing device detected. Confirm the model and software version using official Nothing support resources."
+    $rules = @(
+        @{ Pattern="samsung|galaxy|sm-[a-z0-9]"; Family="Samsung" },
+        @{ Pattern="motorola|moto"; Family="Motorola" },
+        @{ Pattern="xiaomi|redmi|poco"; Family="Xiaomi / Redmi / POCO" },
+        @{ Pattern="huawei|honor"; Family="Huawei / HONOR" },
+        @{ Pattern="oppo|realme|oneplus"; Family="OPPO / realme / OnePlus" },
+        @{ Pattern="vivo|iqoo"; Family="vivo / iQOO" },
+        @{ Pattern="google|pixel"; Family="Google Pixel" },
+        @{ Pattern="sony|xperia"; Family="Sony" },
+        @{ Pattern="nokia|hmd"; Family="Nokia / HMD" },
+        @{ Pattern="tecno|infinix|itel"; Family="Transsion (TECNO / Infinix / itel)" },
+        @{ Pattern="asus|rog phone"; Family="ASUS" },
+        @{ Pattern="lenovo|legion"; Family="Lenovo" },
+        @{ Pattern="zte|nubia|redmagic"; Family="ZTE / nubia" },
+        @{ Pattern="nothing"; Family="Nothing" }
+    )
+    foreach ($rule in $rules) {
+        if ($identity -match $rule.Pattern) {
+            $family = $rule.Family
+            $matchedBy = @($signals | Where-Object { $_.Value -match $rule.Pattern } | ForEach-Object { $_.Field })
             break
         }
     }
 
-    if ([string]::IsNullOrWhiteSpace($brandName)) { $brandName = "Unknown" }
+    $confidence = "Low"
+    if ($matchedBy.Count -gt 0) {
+        if (($matchedBy -contains "manufacturer") -or ($matchedBy -contains "brand")) { $confidence = "High" }
+        else { $confidence = "Medium" }
+    }
+    $supportNote = "No manufacturer-specific workflow is enabled. Verify exact model, variant and region before maintenance."
+    switch ($family) {
+        "Samsung" { $supportNote = "Samsung family identified. Verify exact SM model, CSC/region and firmware before consulting official Samsung resources." }
+        "Motorola" { $supportNote = "Motorola family identified. Verify exact XT model and software channel before maintenance." }
+        "Xiaomi / Redmi / POCO" { $supportNote = "Xiaomi family identified. Verify exact model, codename, region and bootloader state; firmware is not interchangeable by family." }
+        "Huawei / HONOR" { $supportNote = "Huawei/HONOR family identified. Verify model suffix and region; use supported recovery resources." }
+        "OPPO / realme / OnePlus" { $supportNote = "OPPO family identified. Verify exact model and region; do not infer cross-brand firmware compatibility." }
+        "vivo / iQOO" { $supportNote = "vivo family identified. Verify exact regional model before service." }
+        "Google Pixel" { $supportNote = "Google Pixel family identified. Verify the exact device codename and build before using official Google images or tools." }
+        "Sony" { $supportNote = "Sony family identified. Verify Xperia model variant and region." }
+        "Nokia / HMD" { $supportNote = "Nokia/HMD family identified. Verify product code and region." }
+        "Transsion (TECNO / Infinix / itel)" { $supportNote = "Transsion family identified. Verify exact model and board variant." }
+        "ASUS" { $supportNote = "ASUS family identified. Verify exact model and region." }
+        "Lenovo" { $supportNote = "Lenovo family identified. Verify exact model and region." }
+        "ZTE / nubia" { $supportNote = "ZTE family identified. Verify exact model and regional variant." }
+        "Nothing" { $supportNote = "Nothing family identified. Verify exact model and software version." }
+    }
 
     [pscustomobject]@{
         ManufacturerFamily = $family
         Brand = $brandName
+        Model = if ($Model) { $Model.Trim() } else { "Unknown" }
+        DeviceCodename = if ($Device) { $Device.Trim() } else { "Unknown" }
+        AndroidVersion = if ($AndroidVersion) { $AndroidVersion.Trim() } else { "Unknown" }
+        SDK = if ($SDK) { $SDK.Trim() } else { "Unknown" }
+        BuildFingerprint = if ($BuildFingerprint) { $BuildFingerprint.Trim() } else { "Unknown" }
+        Confidence = $confidence
+        MatchedBy = @($matchedBy)
         Detection = "Android/bootloader properties (heuristic)"
-        SupportNote = $notes
+        SupportNote = $supportNote
+        ExactModelVerified = $false
     }
 }
