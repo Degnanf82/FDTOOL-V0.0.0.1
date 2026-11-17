@@ -141,6 +141,11 @@ function Show-DeviceDetails {
         $product = ($result.Output | Where-Object { $_ -match 'product:' } | Select-Object -First 1)
         if ($product) { Write-Host "  $($product.Trim())" }
         else { Write-Host "  Producto: no informado por el bootloader" -ForegroundColor DarkYellow }
+        if (Get-Command Get-ManufacturerProfile -ErrorAction SilentlyContinue) {
+            $fastbootProduct = if ($product) { $product.Trim() } else { "" }
+            $profile = Get-ManufacturerProfile -Product $fastbootProduct
+            Write-Host ("  Familia probable: {0}" -f $profile.ManufacturerFamily) -ForegroundColor Cyan
+        }
         Write-Host "  Nota: algunos fabricantes no permiten consultar todos los datos en Fastboot." -ForegroundColor DarkGray
     }
 }
@@ -204,11 +209,12 @@ function New-DiagnosticReport {
             $entry.Brand = Get-AdbProperty -Serial $device.Serial -Property "ro.product.brand"
             $entry.Model = Get-AdbProperty -Serial $device.Serial -Property "ro.product.model"
             $entry.Device = Get-AdbProperty -Serial $device.Serial -Property "ro.product.device"
+            $entry.Product = Get-AdbProperty -Serial $device.Serial -Property "ro.product.name"
             $entry.AndroidVersion = Get-AdbProperty -Serial $device.Serial -Property "ro.build.version.release"
             $entry.SDK = Get-AdbProperty -Serial $device.Serial -Property "ro.build.version.sdk"
             $entry.BuildFingerprint = Get-AdbProperty -Serial $device.Serial -Property "ro.build.fingerprint"
             if (Get-Command Get-ManufacturerProfile -ErrorAction SilentlyContinue) {
-                $profile = Get-ManufacturerProfile -Manufacturer $entry.Manufacturer -Brand $entry.Brand -Model $entry.Model -Product $entry.Device
+                $profile = Get-ManufacturerProfile -Manufacturer $entry.Manufacturer -Brand $entry.Brand -Model $entry.Model -Product $entry.Product
                 $entry.ManufacturerFamily = $profile.ManufacturerFamily
                 $entry.SupportNote = $profile.SupportNote
             }
