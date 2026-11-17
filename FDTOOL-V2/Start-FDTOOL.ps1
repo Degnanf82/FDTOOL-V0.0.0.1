@@ -201,7 +201,7 @@ function New-DiagnosticReport {
         elseif ($device.Mode -eq "Fastboot") {
             $productResult = Invoke-ExternalTool -Executable $script:Fastboot -Arguments @("-s", $device.Serial, "getvar", "product")
             $productLine = $productResult.Output | Where-Object { $_ -match 'product:' } | Select-Object -First 1
-            $entry.Product = if ($productLine) { $productLine.Trim() } else { "Not reported" }
+            if ($productLine) { $entry.Product = $productLine.Trim() } else { $entry.Product = "Not reported" }
         }
         $deviceReports += [pscustomobject]$entry
     }
@@ -214,7 +214,7 @@ function New-DiagnosticReport {
         Application = "FDTOOL V2"
         ReportDate = (Get-Date).ToString("yyyy-MM-ddTHH:mm:ssK")
         Computer = $env:COMPUTERNAME
-        Windows = if ($windows) { "$($windows.Caption) ($($windows.Version))" } else { [System.Environment]::OSVersion.VersionString }
+        Windows = $windowsText
         PowerShell = $PSVersionTable.PSVersion.ToString()
         ADB = $adbVersion
         Fastboot = $fastbootVersion
