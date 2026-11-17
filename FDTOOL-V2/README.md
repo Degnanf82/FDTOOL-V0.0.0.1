@@ -31,13 +31,13 @@ Important limitations and safeguards:
 
 - This does **not** remove the APK from the read-only system image or free the full system-partition space.
 - ADB USB debugging must be enabled and authorized on the phone.
-- The user must select one package and type its full package name to confirm each uninstall.
+- The package list shows a friendly name when FDTOOL has a verified local mapping, alongside the exact technical package ID. Unknown names remain explicitly marked as unmapped; FDTOOL does not guess the app name.\n- The user must select one package and type its full package name to confirm each uninstall.
 - FDTOOL blocks a list of core Android/Google packages and critical provider/system services, and detects/protects the active home launcher when Android reports it.
 - OEM-specific dependencies may still exist. Removing a non-blocked package can break features; review the package name before proceeding.
 - Restoration only works if the package remains available in the device's system image.
 - No batch uninstall, root, bootloader unlock, FRP bypass or system-partition modification is provided.
 
-Safety tests:
+The local name catalog currently covers common Samsung, Google, Motorola, Xiaomi, OPPO/OnePlus and popular third-party packages. It is intentionally conservative; names can vary by region, Android version and OEM build.\n\nSafety tests:
 
 ```powershell
 powershell.exe -NoProfile -File .\Tests\Test-PreinstalledApps.ps1
