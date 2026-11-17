@@ -211,7 +211,7 @@ function Start-PreinstalledAppManager {
         return
     }
 
-    Invoke-PreinstalledAppManager -AdbPath $script:Adb -Serial $devices[$index].Serial
+    Invoke-PreinstalledAppManager -AdbPath $script:Adb -Serial $devices[$index].Serial -OutputDirectory (Join-Path $script:Root "reports")
 }
 
 function Protect-Serial {
