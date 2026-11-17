@@ -32,29 +32,33 @@ function Test-ProcedureDeviceMatch {
     $codename = [string]$Device.DeviceCodename
     $android = [string]$Device.AndroidVersion
     $matchRules = $Procedure.match
-    $manufacturerMatch = @($matchRules.manufacturers | Where-Object { $_ -ieq $manufacturer }).Count -gt 0
+    $manufacturerRules = @($matchRules.manufacturers | Where-Object { -not [string]::IsNullOrWhiteSpace([string]$_) })
+    $manufacturerMatch = @($manufacturerRules | Where-Object { $_ -ieq $manufacturer }).Count -gt 0
     if (-not $manufacturerMatch) {
         return [pscustomobject]@{ ProcedureId=$Procedure.id; MatchLevel="no-match"; Compatible=$false; ReviewRequired=$true; CanAutomate=$false; Reason="Fabricante/familia no incluido en el procedimiento." }
     }
 
-    $hasModelRules = (@($matchRules.models).Count -gt 0) -or (@($matchRules.modelCodes).Count -gt 0)
+    $modelRules = @($matchRules.models | Where-Object { -not [string]::IsNullOrWhiteSpace([string]$_) })
+    $modelCodeRules = @($matchRules.modelCodes | Where-Object { -not [string]::IsNullOrWhiteSpace([string]$_) })
+    $androidRules = @($matchRules.androidVersions | Where-Object { -not [string]::IsNullOrWhiteSpace([string]$_) })
+    $hasModelRules = ($modelRules.Count -gt 0) -or ($modelCodeRules.Count -gt 0)
     $modelMatch = $false
-    if (@($matchRules.models).Count -gt 0) {
-        $modelMatch = @($matchRules.models | Where-Object { $_ -ieq $model }).Count -gt 0
+    if ($modelRules.Count -gt 0) {
+        $modelMatch = @($modelRules | Where-Object { $_ -ieq $model }).Count -gt 0
     }
-    if (@($matchRules.modelCodes).Count -gt 0 -and $codename -and $codename -ne "Unknown") {
-        $modelMatch = $modelMatch -or (@($matchRules.modelCodes | Where-Object { $_ -ieq $codename }).Count -gt 0)
+    if ($modelCodeRules.Count -gt 0 -and $codename -and $codename -ne "Unknown") {
+        $modelMatch = $modelMatch -or (@($modelCodeRules | Where-Object { $_ -ieq $codename }).Count -gt 0)
     }
     if ($hasModelRules -and -not $modelMatch) {
         return [pscustomobject]@{ ProcedureId=$Procedure.id; MatchLevel="no-match"; Compatible=$false; ReviewRequired=$true; CanAutomate=$false; Reason="El modelo/codename no coincide con los identificadores declarados." }
     }
 
-    if (@($matchRules.androidVersions).Count -gt 0 -and $android -and $android -ne "Unknown") {
-        if (@($matchRules.androidVersions | Where-Object { $_ -ieq $android }).Count -eq 0) {
+    if ($androidRules.Count -gt 0 -and $android -and $android -ne "Unknown") {
+        if (@($androidRules | Where-Object { $_ -ieq $android }).Count -eq 0) {
             return [pscustomobject]@{ ProcedureId=$Procedure.id; MatchLevel="no-match"; Compatible=$false; ReviewRequired=$true; CanAutomate=$false; Reason="La versión Android no está incluida." }
         }
     }
-    elseif (@($matchRules.androidVersions).Count -gt 0) {
+    elseif ($androidRules.Count -gt 0) {
         return [pscustomobject]@{ ProcedureId=$Procedure.id; MatchLevel="review-required"; Compatible=$false; ReviewRequired=$true; CanAutomate=$false; Reason="Falta la versión Android para validar compatibilidad." }
     }
 
