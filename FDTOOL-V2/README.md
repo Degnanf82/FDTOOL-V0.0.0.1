@@ -12,7 +12,7 @@ The first V2 module is a **read-only diagnostic launcher** for Windows 10/11. It
 - Read basic Android properties from an authorized ADB device: manufacturer, brand, model, device codename, Android release and SDK level.
 - Query the product identifier from Fastboot where the bootloader supports it.\n- Export a JSON diagnostic report containing Windows/tool versions and connected device details. Serial numbers are masked automatically.
 
-## Requirements
+## Manufacturer identification\n\nFDTOOL uses Android properties (`manufacturer`, `brand`, `model`, `device`, and `product`) and the Fastboot product string to classify common device families, including Samsung, Motorola, Xiaomi/Redmi/POCO, Huawei/HONOR, OPPO/realme/OnePlus, vivo/iQOO, Google Pixel, Sony, Nokia/HMD, TECNO/Infinix/itel, ASUS, Lenovo, ZTE/nubia and Nothing. This is a best-effort identification, not a definitive model/firmware compatibility check.\n\nRun the lightweight profile tests with:\n\n```powershell\npowershell.exe -NoProfile -File .\\Tests\\Test-DeviceProfiles.ps1\n```\n\n## Requirements
 
 - Windows 10 or Windows 11.
 - Windows PowerShell 5.1 or PowerShell 7+.
