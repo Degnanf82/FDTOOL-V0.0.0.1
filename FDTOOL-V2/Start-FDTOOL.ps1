@@ -10,6 +10,8 @@ $script:Root = Split-Path -Parent $MyInvocation.MyCommand.Path
 $script:PlatformTools = Join-Path $script:Root "tools\platform-tools"
 $script:Adb = $null
 $script:Fastboot = $null
+$script:ProfilesPath = Join-Path $script:Root "Modules\DeviceProfiles.ps1"
+if (Test-Path -LiteralPath $script:ProfilesPath -PathType Leaf) { . $script:ProfilesPath }
 
 function Write-Title {
     Clear-Host
@@ -111,13 +113,21 @@ function Show-DeviceDetails {
             Marca = "ro.product.brand"
             Modelo = "ro.product.model"
             Dispositivo = "ro.product.device"
+            Producto = "ro.product.name"
             Android = "ro.build.version.release"
             SDK = "ro.build.version.sdk"
         }
+        $deviceInfo = @{}
         foreach ($entry in $properties.GetEnumerator()) {
             $value = Get-AdbProperty -Serial $Device.Serial -Property $entry.Value
             if ([string]::IsNullOrWhiteSpace($value)) { $value = "No disponible" }
+            $deviceInfo[$entry.Key] = $value
             Write-Host ("  {0,-13} {1}" -f ($entry.Key + ":"), $value)
+        }
+        if (Get-Command Get-ManufacturerProfile -ErrorAction SilentlyContinue) {
+            $profile = Get-ManufacturerProfile -Manufacturer $deviceInfo["Fabricante"] -Brand $deviceInfo["Marca"] -Model $deviceInfo["Modelo"] -Product $deviceInfo["Producto"]
+            Write-Host ("  Familia:      {0}" -f $profile.ManufacturerFamily) -ForegroundColor Cyan
+            Write-Host ("  Nota:         {0}" -f $profile.SupportNote) -ForegroundColor DarkGray
         }
     }
     elseif ($Device.Mode -eq "ADB" -and $Device.State -eq "unauthorized") {
@@ -197,11 +207,21 @@ function New-DiagnosticReport {
             $entry.AndroidVersion = Get-AdbProperty -Serial $device.Serial -Property "ro.build.version.release"
             $entry.SDK = Get-AdbProperty -Serial $device.Serial -Property "ro.build.version.sdk"
             $entry.BuildFingerprint = Get-AdbProperty -Serial $device.Serial -Property "ro.build.fingerprint"
+            if (Get-Command Get-ManufacturerProfile -ErrorAction SilentlyContinue) {
+                $profile = Get-ManufacturerProfile -Manufacturer $entry.Manufacturer -Brand $entry.Brand -Model $entry.Model -Product $entry.Device
+                $entry.ManufacturerFamily = $profile.ManufacturerFamily
+                $entry.SupportNote = $profile.SupportNote
+            }
         }
         elseif ($device.Mode -eq "Fastboot") {
             $productResult = Invoke-ExternalTool -Executable $script:Fastboot -Arguments @("-s", $device.Serial, "getvar", "product")
             $productLine = $productResult.Output | Where-Object { $_ -match 'product:' } | Select-Object -First 1
             if ($productLine) { $entry.Product = $productLine.Trim() } else { $entry.Product = "Not reported" }
+            if (Get-Command Get-ManufacturerProfile -ErrorAction SilentlyContinue) {
+                $profile = Get-ManufacturerProfile -Product $entry.Product
+                $entry.ManufacturerFamily = $profile.ManufacturerFamily
+                $entry.SupportNote = $profile.SupportNote
+            }
         }
         $deviceReports += [pscustomobject]$entry
     }
