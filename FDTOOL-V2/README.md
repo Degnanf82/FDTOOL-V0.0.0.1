@@ -23,6 +23,26 @@ Run the lightweight profile tests with:
 powershell.exe -NoProfile -File .\Tests\\Test-DeviceProfiles.ps1
 ```
 
+## Preinstalled applications (no root)
+
+The app manager lists Android system packages over an authorized ADB connection. It can request an uninstall for the current Android user (user 0) with `pm uninstall --user 0 PACKAGE`, and request restoration with `cmd package install-existing --user 0 PACKAGE` (with a Package Manager fallback).
+
+Important limitations and safeguards:
+
+- This does **not** remove the APK from the read-only system image or free the full system-partition space.
+- ADB USB debugging must be enabled and authorized on the phone.
+- The user must select one package and type its full package name to confirm each uninstall.
+- FDTOOL blocks a list of core Android/Google packages and critical provider/system services.
+- OEM-specific dependencies may still exist. Removing a non-blocked package can break features; review the package name before proceeding.
+- Restoration only works if the package remains available in the device's system image.
+- No batch uninstall, root, bootloader unlock, FRP bypass or system-partition modification is provided.
+
+Safety tests:
+
+```powershell
+powershell.exe -NoProfile -File .\Tests\Test-PreinstalledApps.ps1
+```
+
 ## Requirements
 
 - Windows 10 or Windows 11.
