@@ -1,0 +1,59 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://fdtool.example/schemas/service-procedure-catalog.schema.json",
+  "title": "FDTOOL V2 Service Procedure Catalog",
+  "type": "object",
+  "required": ["schemaVersion", "catalogVersion", "generatedAt", "procedures"],
+  "additionalProperties": false,
+  "properties": {
+    "schemaVersion": { "type": "string", "const": "1.0.0" },
+    "catalogVersion": { "type": "string", "minLength": 1 },
+    "generatedAt": { "type": "string", "format": "date-time" },
+    "expiresAt": { "type": "string", "format": "date-time" },
+    "procedures": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "title", "category", "status", "match", "summary", "steps", "source"],
+        "additionalProperties": false,
+        "properties": {
+          "id": { "type": "string", "pattern": "^[a-z0-9][a-z0-9.-]{2,80}$" },
+          "title": { "type": "string", "minLength": 3 },
+          "category": { "enum": ["sim-lock-diagnosis", "official-network-unlock", "nck-guidance", "bootloader-info", "firmware-diagnosis", "general-diagnostics"] },
+          "status": { "enum": ["verified", "limited", "research", "deprecated"] },
+          "match": {
+            "type": "object",
+            "required": ["manufacturers"],
+            "properties": {
+              "manufacturers": { "type": "array", "items": { "type": "string" }, "minItems": 1 },
+              "models": { "type": "array", "items": { "type": "string" } },
+              "modelCodes": { "type": "array", "items": { "type": "string" } },
+              "chipsets": { "type": "array", "items": { "enum": ["qualcomm", "mediatek", "exynos", "tensor", "unisoc", "other"] } },
+              "operators": { "type": "array", "items": { "type": "string" } },
+              "regions": { "type": "array", "items": { "type": "string" } },
+              "androidVersions": { "type": "array", "items": { "type": "string" } }
+            },
+            "additionalProperties": false
+          },
+          "summary": { "type": "string", "minLength": 10 },
+          "requirements": { "type": "array", "items": { "type": "string" } },
+          "connection": { "enum": ["none", "adb-read-only", "fastboot-read-only", "manufacturer-portal", "manual"] },
+          "steps": { "type": "array", "items": { "type": "string" }, "minItems": 1 },
+          "limitations": { "type": "array", "items": { "type": "string" } },
+          "source": {
+            "type": "object",
+            "required": ["name", "url", "checkedAt"],
+            "properties": {
+              "name": { "type": "string" },
+              "url": { "type": "string", "format": "uri" },
+              "checkedAt": { "type": "string", "format": "date-time" }
+            },
+            "additionalProperties": false
+          },
+          "reviewedBy": { "type": "string" },
+          "reviewedAt": { "type": "string", "format": "date-time" }
+        }
+      }
+    }
+  }
+}
