@@ -179,13 +179,13 @@ while ($true) {
     Write-Host "  0. Salir"
     Write-Host ""
     $option = Read-Host "  Selecciona una opción"
+    if ($option -eq "0") { break }
     switch ($option) {
         "1" { Show-Scan }
         "2" {
             $script:Adb = Resolve-Tool -Name "adb"
             $script:Fastboot = Resolve-Tool -Name "fastboot"
         }
-        "0" { break }
         default { Write-Host "  Opción no válida." -ForegroundColor Yellow; Start-Sleep -Seconds 1 }
     }
 }
