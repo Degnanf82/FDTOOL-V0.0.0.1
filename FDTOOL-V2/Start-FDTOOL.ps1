@@ -209,6 +209,8 @@ function New-DiagnosticReport {
     $windows = Get-CimInstance -ClassName Win32_OperatingSystem -ErrorAction SilentlyContinue
     $adbVersion = if ($script:Adb) { (Invoke-ExternalTool -Executable $script:Adb -Arguments @("version")).Output -join " " } else { "Not found" }
     $fastbootVersion = if ($script:Fastboot) { (Invoke-ExternalTool -Executable $script:Fastboot -Arguments @("--version")).Output -join " " } else { "Not found" }
+    $windowsText = [System.Environment]::OSVersion.VersionString
+    if ($windows) { $windowsText = "$($windows.Caption) ($($windows.Version))" }
 
     $report = [pscustomobject]@{
         Application = "FDTOOL V2"
@@ -249,6 +251,7 @@ while ($true) {
     Write-Host ""
     Write-Host "  1. Detectar dispositivos (ADB / Fastboot)"
     Write-Host "  2. Volver a comprobar herramientas"
+    Write-Host "  3. Generar informe de diagnóstico (JSON)"
     Write-Host "  0. Salir"
     Write-Host ""
     $option = Read-Host "  Selecciona una opción"
@@ -259,6 +262,7 @@ while ($true) {
             $script:Adb = Resolve-Tool -Name "adb"
             $script:Fastboot = Resolve-Tool -Name "fastboot"
         }
+        "3" { New-DiagnosticReport }
         default { Write-Host "  Opción no válida." -ForegroundColor Yellow; Start-Sleep -Seconds 1 }
     }
 }
