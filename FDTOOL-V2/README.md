@@ -95,3 +95,25 @@ This is a data/catalog foundation, not an automatic SIM unlocker. The initial pr
 ## Diagnostic report privacy
 
 Reports are saved locally under `reports/`. Device serial numbers are masked by default (only the last four characters remain visible). Reports may include device model, Android version, build fingerprint, Windows version, and tool versions. Review a report before sharing it with anyone.
+
+## Device identification engine
+
+The profile engine now returns a confidence level, matched property names, model, device codename, Android release, SDK and build fingerprint. Identification remains heuristic: family recognition is not proof of exact model, regional variant or firmware compatibility. Missing or ambiguous identifiers must be reviewed.
+
+## Service procedure browser
+
+Menu option 5 loads the local JSON catalog and compares its declared manufacturer, model/codename and Android constraints with the connected authorized ADB device. Results distinguish family matches from exact-model matches and show the procedure status, requirements, steps, limitations and source.
+
+Important controls:
+- The current catalog procedure is `limited` and manual. It is shown as a family-level diagnostic suggestion only.
+- A family match is never presented as exact model compatibility.
+- Procedures marked `research` or `deprecated` are not eligible for automation.
+- This version only displays procedure data; it does not execute catalog steps or perform SIM/network unlocking.
+- The matcher requires a matching manufacturer family and rejects model/Android mismatches when those constraints are declared.
+- Even a future `verified` procedure will require a separately implemented, reviewed operation and explicit user confirmation; catalog text is never executable code.
+
+Run matcher tests:
+
+```powershell
+pwsh -NoProfile -File .\Tests\Test-ServiceProcedures.ps1
+```
