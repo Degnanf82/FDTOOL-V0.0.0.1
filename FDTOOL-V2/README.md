@@ -32,7 +32,7 @@ Important limitations and safeguards:
 - This does **not** remove the APK from the read-only system image or free the full system-partition space.
 - ADB USB debugging must be enabled and authorized on the phone.
 - The user must select one package and type its full package name to confirm each uninstall.
-- FDTOOL blocks a list of core Android/Google packages and critical provider/system services.
+- FDTOOL blocks a list of core Android/Google packages and critical provider/system services, and detects/protects the active home launcher when Android reports it.
 - OEM-specific dependencies may still exist. Removing a non-blocked package can break features; review the package name before proceeding.
 - Restoration only works if the package remains available in the device's system image.
 - No batch uninstall, root, bootloader unlock, FRP bypass or system-partition modification is provided.
