@@ -69,6 +69,69 @@ function Get-AppFriendlyName {
     return "Name not mapped"
 }
 
+
+function Get-AppCleanupRecommendation {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory=$true)][string]$PackageName,
+        [Parameter(Mandatory=$true)][string]$ManufacturerFamily
+    )
+
+    if (Test-ProtectedPackage -PackageName $PackageName) {
+        return [pscustomobject]@{ Status = "Protegida"; Reason = "Paquete Android/Google crítico protegido por FDTOOL." }
+    }
+
+    # Only well-known optional user-facing apps are listed. This is a review hint,
+    # never a claim that removal is universally safe on every regional firmware.
+    $optional = @{
+        "Samsung" = @{
+            "com.samsung.android.app.notes" = "Aplicación de notas; comprueba antes si contiene datos que necesitas."
+            "com.samsung.android.app.spage" = "Panel Samsung Free/Daily; puede estar integrado con la pantalla de inicio."
+            "com.samsung.android.game.gamehome" = "Centro de juegos; revisa dependencias de Game Booster."
+            "com.samsung.android.voc" = "Samsung Members; puede incluir diagnóstico y soporte del fabricante."
+            "com.samsung.android.email.provider" = "Cliente de correo Samsung; conserva si gestionas correo con él."
+        }
+        "Motorola" = @{
+            "com.motorola.help" = "Ayuda de Motorola; conserva si utilizas soporte y guías del fabricante."
+            "com.motorola.moto" = "Aplicación Moto; algunas funciones del dispositivo pueden depender de ella."
+        }
+        "Xiaomi / Redmi / POCO" = @{
+            "com.miui.player" = "Reproductor de música; revisa si es tu reproductor predeterminado."
+            "com.miui.videoplayer" = "Reproductor de vídeo; revisa asociaciones y funciones multimedia."
+            "com.miui.weather2" = "Aplicación del tiempo; puede estar vinculada a widgets."
+            "com.miui.notes" = "Notas Xiaomi; conserva si contiene información."
+            "com.xiaomi.mipicks" = "Tienda GetApps; puede gestionar actualizaciones de apps del fabricante."
+            "com.xiaomi.midrop" = "ShareMe; transferencia de archivos entre dispositivos."
+        }
+    }
+
+    if ($optional.ContainsKey($ManufacturerFamily) -and $optional[$ManufacturerFamily].ContainsKey($PackageName)) {
+        return [pscustomobject]@{
+            Status = "Opcional - revisar"
+            Reason = $optional[$ManufacturerFamily][$PackageName]
+        }
+    }
+
+    return [pscustomobject]@{
+        Status = "No evaluada - conservar"
+        Reason = "FDTOOL no tiene una recomendación específica y validada para esta combinación de fabricante y paquete."
+    }
+}
+
+function Get-AdbManufacturerFamily {
+    param(
+        [Parameter(Mandatory=$true)][string]$AdbPath,
+        [Parameter(Mandatory=$true)][string]$Serial
+    )
+    $manufacturer = @(& $AdbPath -s $Serial shell getprop ro.product.manufacturer 2>&1) -join ""
+    $brand = @(& $AdbPath -s $Serial shell getprop ro.product.brand 2>&1) -join ""
+    $identity = "$manufacturer $brand".ToLowerInvariant()
+    if ($identity -match "samsung") { return "Samsung" }
+    if ($identity -match "motorola") { return "Motorola" }
+    if ($identity -match "xiaomi|redmi|poco") { return "Xiaomi / Redmi / POCO" }
+    return "Other / Unknown"
+}
+
 function Test-SafePackageName {
     param([Parameter(Mandatory=$true)][AllowEmptyString()][string]$PackageName)
     return ($PackageName -match '^[A-Za-z0-9_]+(\.[A-Za-z0-9_]+)+$')
@@ -149,6 +212,7 @@ function Get-AdbSystemPackages {
     }
 
     $homeLauncher = Get-AdbHomeLauncherPackage -AdbPath $AdbPath -Serial $Serial
+    $manufacturerFamily = Get-AdbManufacturerFamily -AdbPath $AdbPath -Serial $Serial
     $packages = @()
     foreach ($line in $output) {
         $text = "$line".Trim()
@@ -157,6 +221,7 @@ function Get-AdbSystemPackages {
             $packages += [pscustomobject]@{
                 PackageName = $name
                 Protected = ((Test-ProtectedPackage -PackageName $name) -or ($homeLauncher -and $name -eq $homeLauncher))
+                Recommendation = (Get-AppCleanupRecommendation -PackageName $name -ManufacturerFamily $manufacturerFamily)
             }
         }
     }
@@ -200,7 +265,8 @@ function Invoke-PreinstalledAppManager {
                     $tag = if ($item.Protected) { "[PROTEGIDA]" } else { "[sistema]" }
                     $color = if ($item.Protected) { "DarkYellow" } else { "Gray" }
                     $friendlyName = Get-AppFriendlyName -PackageName $item.PackageName
-                    Write-Host ("  {0,-14} {1,-34} {2}" -f $tag, $friendlyName, $item.PackageName) -ForegroundColor $color
+                    Write-Host ("  {0,-14} {1,-30} {2,-48} {3}" -f $tag, $item.Recommendation.Status, $friendlyName, $item.PackageName) -ForegroundColor $color
+                    if ($item.Recommendation.Status -eq "Opcional - revisar") { Write-Host ("                  Motivo: {0}" -f $item.Recommendation.Reason) -ForegroundColor DarkGray }
                 }
                 Write-Host ""
                 Write-Host ("  Total: {0} aplicaciones del sistema; {1} protegidas por FDTOOL." -f $packages.Count, @($packages | Where-Object Protected).Count)
@@ -216,10 +282,10 @@ function Invoke-PreinstalledAppManager {
             }
 
             Write-Host ""
-            Write-Host "  Aplicaciones candidatas (la compatibilidad depende del fabricante):" -ForegroundColor Yellow
+            Write-Host "  Candidatas: las no protegidas siguen requiriendo revisión individual." -ForegroundColor Yellow
             for ($i = 0; $i -lt $removable.Count; $i++) {
                 $friendlyName = Get-AppFriendlyName -PackageName $removable[$i].PackageName
-                Write-Host ("  [{0}] {1}  ({2})" -f ($i + 1), $friendlyName, $removable[$i].PackageName)
+                Write-Host ("  [{0}] [{1}] {2}  ({3})" -f ($i + 1), $removable[$i].Recommendation.Status, $friendlyName, $removable[$i].PackageName)
             }
             $choice = Read-Host "  Número de paquete (Enter para cancelar)"
             if ($choice -notmatch '^\d+$') { continue }
@@ -234,6 +300,9 @@ function Invoke-PreinstalledAppManager {
             Write-Host ""
             $selectedName = Get-AppFriendlyName -PackageName $selected
             Write-Host ("  Aplicación: {0}" -f $selectedName) -ForegroundColor Cyan
+            $recommendation = Get-AppCleanupRecommendation -PackageName $selected -ManufacturerFamily (Get-AdbManufacturerFamily -AdbPath $AdbPath -Serial $Serial)
+            Write-Host ("  Evaluación FDTOOL: {0}" -f $recommendation.Status) -ForegroundColor Yellow
+            Write-Host ("  Motivo: {0}" -f $recommendation.Reason) -ForegroundColor DarkGray
             Write-Host "  ADVERTENCIA: desinstalar una app del sistema puede afectar funciones del teléfono." -ForegroundColor Yellow
             Write-Host "  La operación se limita al usuario 0 y normalmente puede revertirse."
             Write-Host "  Para confirmar, escribe exactamente el nombre del paquete:"
