@@ -12,6 +12,8 @@ $script:Adb = $null
 $script:Fastboot = $null
 $script:ProfilesPath = Join-Path $script:Root "Modules\DeviceProfiles.ps1"
 if (Test-Path -LiteralPath $script:ProfilesPath -PathType Leaf) { . $script:ProfilesPath }
+$script:ServiceModulePath = Join-Path $script:Root "Modules\ServiceProcedures.ps1"
+if (Test-Path -LiteralPath $script:ServiceModulePath -PathType Leaf) { . $script:ServiceModulePath }
 $script:AppsModulePath = Join-Path $script:Root "Modules\PreinstalledApps.ps1"
 if (Test-Path -LiteralPath $script:AppsModulePath -PathType Leaf) { . $script:AppsModulePath }
 
