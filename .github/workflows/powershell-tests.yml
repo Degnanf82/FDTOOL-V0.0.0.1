@@ -26,8 +26,10 @@ jobs:
             "FDTOOL-V2/Start-FDTOOL.ps1",
             "FDTOOL-V2/Modules/DeviceProfiles.ps1",
             "FDTOOL-V2/Modules/PreinstalledApps.ps1",
+            "FDTOOL-V2/Modules/ServiceProcedures.ps1",
             "FDTOOL-V2/Tests/Test-DeviceProfiles.ps1",
-            "FDTOOL-V2/Tests/Test-PreinstalledApps.ps1"
+            "FDTOOL-V2/Tests/Test-PreinstalledApps.ps1",
+            "FDTOOL-V2/Tests/Test-ServiceProcedures.ps1"
           )
           foreach ($file in $files) {
             $tokens = $null
@@ -45,3 +47,7 @@ jobs:
       - name: Run preinstalled app safety tests
         shell: pwsh
         run: ./FDTOOL-V2/Tests/Test-PreinstalledApps.ps1
+
+      - name: Run service procedure matcher tests
+        shell: pwsh
+        run: ./FDTOOL-V2/Tests/Test-ServiceProcedures.ps1
