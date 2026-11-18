@@ -5,7 +5,7 @@ $root = Split-Path -Parent $PSScriptRoot
 . (Join-Path $root "Modules\DeviceIntelligence.ps1")
 
 $cases = @(
-    @{ Name="Qualcomm"; Properties=@{"ro.soc.manufacturer"="Qualcomm";"ro.soc.model"="SM8550";"ro.board.platform"="kalama"}; Vendor="Qualcomm"; Family="Snapdragon / Qualcomm" },
+    @{ Name="Qualcomm"; Properties=@{"ro.soc.manufacturer"="Qualcomm";"ro.soc.model"="SM8550";"ro.board.platform"="kalama";"ro.product.cpu.abi"="arm64-v8a";"ro.build.version.security_patch"="2026-10-01";"ro.bootloader"="S918BXXU";"gsm.version.baseband"="S918BXXU"}; Vendor="Qualcomm"; Family="Snapdragon / Qualcomm" },
     @{ Name="MediaTek"; Properties=@{"ro.board.platform"="mt6985";"ro.hardware"="mt6985"}; Vendor="MediaTek"; Family="Dimensity / Helio / MediaTek" },
     @{ Name="Exynos"; Properties=@{"ro.board.platform"="s5e9925"}; Vendor="Samsung"; Family="Exynos" },
     @{ Name="Tensor"; Properties=@{"ro.soc.model"="Tensor G3";"ro.hardware"="tensor"}; Vendor="Google"; Family="Tensor" },
@@ -17,6 +17,12 @@ foreach ($case in $cases) {
     if ($profile.SoCVendor -ne $case.Vendor) { throw "$($case.Name): expected vendor $($case.Vendor), got $($profile.SoCVendor)." }
     if ($profile.SoCFamily -ne $case.Family) { throw "$($case.Name): family mismatch." }
     if ($profile.ExactChipsetVerified) { throw "$($case.Name): heuristic profile must not claim exact chipset verification." }
+    if ($case.Name -eq "Qualcomm") {
+        if ($profile.CpuArchitecture -ne "arm64-v8a") { throw "CPU architecture property was not retained." }
+        if ($profile.AndroidSecurityPatch -ne "2026-10-01") { throw "Security patch property was not retained." }
+        if ($profile.BootloaderVersion -ne "S918BXXU") { throw "Bootloader property was not retained." }
+        if ($profile.BasebandVersion -ne "S918BXXU") { throw "Baseband property was not retained." }
+    }
 }
 $unknown = Get-FdtoolHardwareProfile -Properties @{}
 if ($unknown.SoCVendor -ne "Unknown") { throw "Empty properties must not invent a chipset vendor." }
