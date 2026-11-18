@@ -130,3 +130,16 @@ Run the Service Engine tests:
 ```powershell
 pwsh -NoProfile -File .\\Tests\\Test-ServiceEngine.ps1
 ```
+
+
+## Device Intelligence Engine (initial platform identification)
+
+The read-only hardware profile examines Android system properties when ADB is authorized. It can infer likely platform families such as Qualcomm Snapdragon, MediaTek Dimensity/Helio, Samsung Exynos, Google Tensor, UNISOC, HiSilicon Kirin and Broadcom when exposed by the device.
+
+The launcher capability overview now displays the inferred SoC vendor/family, reported model, platform identifier and confidence. Some manufacturers hide or omit these properties, so unknown results are valid. The engine never treats a family inference as proof of exact chipset, board revision or firmware compatibility.
+
+Run hardware intelligence tests:
+
+```powershell
+pwsh -NoProfile -File .\\Tests\\Test-DeviceIntelligence.ps1
+```
