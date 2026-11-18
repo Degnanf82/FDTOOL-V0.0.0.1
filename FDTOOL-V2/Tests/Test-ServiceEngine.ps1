@@ -6,7 +6,7 @@ $root = Split-Path -Parent $PSScriptRoot
 
 $profile = [pscustomobject]@{ ManufacturerFamily="Samsung"; Model="SM-A546B"; Confidence="High" }
 $adb = @(Get-FdtoolServiceCapabilities -DeviceProfile $profile -ConnectionMode ADB -AdbAuthorized $true -FastbootAvailable $true -ServiceCatalogAvailable $true)
-if ($adb.Count -ne 6) { throw "Expected six capability records for authorized ADB, got $($adb.Count)." }
+if ($adb.Count -ne 7) { throw "Expected seven capability records for authorized ADB, got $($adb.Count)." }
 if (($adb | Where-Object Id -eq "android.diagnostics").Status -ne "available") { throw "Authorized ADB diagnostics should be available." }
 if (($adb | Where-Object Id -eq "android.user-app-management").Risk -ne "moderate") { throw "App management must be marked moderate risk." }
 if (($adb | Where-Object Id -eq "oem.advanced-service").Status -ne "planned") { throw "Unimplemented OEM operations must remain planned." }
