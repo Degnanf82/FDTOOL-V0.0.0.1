@@ -14,6 +14,8 @@ $script:ProfilesPath = Join-Path $script:Root "Modules\DeviceProfiles.ps1"
 if (Test-Path -LiteralPath $script:ProfilesPath -PathType Leaf) { . $script:ProfilesPath }
 $script:ServiceModulePath = Join-Path $script:Root "Modules\ServiceProcedures.ps1"
 if (Test-Path -LiteralPath $script:ServiceModulePath -PathType Leaf) { . $script:ServiceModulePath }
+$script:ServiceEnginePath = Join-Path $script:Root "Modules\\ServiceEngine.ps1"
+if (Test-Path -LiteralPath $script:ServiceEnginePath -PathType Leaf) { . $script:ServiceEnginePath }
 $script:AppsModulePath = Join-Path $script:Root "Modules\PreinstalledApps.ps1"
 if (Test-Path -LiteralPath $script:AppsModulePath -PathType Leaf) { . $script:AppsModulePath }
 
@@ -290,6 +292,189 @@ function Start-ServiceProcedureBrowser {
         Write-Host ("  Fuente: {0} - {1}" -f $procedure.source.name, $procedure.source.url) -ForegroundColor DarkGray
     }
     Write-Host ""
+    [void](Read-Host "  Pulsa Enter para continuar")
+}
+
+
+function Start-ServiceCapabilityOverview {
+    $adbDevices = @(Get-AdbDevices)
+    $fastbootDevices = @(Get-FastbootDevices)
+    $devices = @($adbDevices) + @($fastbootDevices)
+    if ($devices.Count -eq 0) {
+        Write-Host "  No se detectaron dispositivos ADB/Fastboot." -ForegroundColor Yellow
+        [void](Read-Host "  Pulsa Enter para continuar")
+        return
+    }
+    for ($i = 0; $i -lt $devices.Count; $i++) {
+        Write-Host ("  [{0}] {1} | {2} | {3}" -f ($i + 1), $devices[$i].Mode, $devices[$i].State, $devices[$i].Serial)
+    }
+    $choice = Read-Host "  Selecciona dispositivo para consultar capacidades (Enter para cancelar)"
+    if ($choice -notmatch '^\\d+
+    param([string]$Serial)
+    if ([string]::IsNullOrWhiteSpace($Serial)) { return "No disponible" }
+    if ($Serial.Length -le 4) { return ("*" * $Serial.Length) }
+    return (("*" * ($Serial.Length - 4)) + $Serial.Substring($Serial.Length - 4))
+}
+
+function New-DiagnosticReport {
+    Write-Title
+    Write-Host "  Generando informe de diagnóstico..." -ForegroundColor Yellow
+
+    $adbDevices = @(Get-AdbDevices)
+    $fastbootDevices = @(Get-FastbootDevices)
+    $deviceReports = @()
+
+    foreach ($device in (@($adbDevices) + @($fastbootDevices))) {
+        $entry = [ordered]@{
+            Mode = $device.Mode
+            State = $device.State
+            SerialMasked = Protect-Serial -Serial $device.Serial
+            Details = $device.Details
+        }
+
+        if ($device.Mode -eq "ADB" -and $device.State -eq "device") {
+            $entry.Manufacturer = Get-AdbProperty -Serial $device.Serial -Property "ro.product.manufacturer"
+            $entry.Brand = Get-AdbProperty -Serial $device.Serial -Property "ro.product.brand"
+            $entry.Model = Get-AdbProperty -Serial $device.Serial -Property "ro.product.model"
+            $entry.Device = Get-AdbProperty -Serial $device.Serial -Property "ro.product.device"
+            $entry.Product = Get-AdbProperty -Serial $device.Serial -Property "ro.product.name"
+            $entry.AndroidVersion = Get-AdbProperty -Serial $device.Serial -Property "ro.build.version.release"
+            $entry.SDK = Get-AdbProperty -Serial $device.Serial -Property "ro.build.version.sdk"
+            $entry.BuildFingerprint = Get-AdbProperty -Serial $device.Serial -Property "ro.build.fingerprint"
+            if (Get-Command Get-ManufacturerProfile -ErrorAction SilentlyContinue) {
+                $profile = Get-ManufacturerProfile -Manufacturer $entry.Manufacturer -Brand $entry.Brand -Model $entry.Model -Product $entry.Product
+                $entry.ManufacturerFamily = $profile.ManufacturerFamily
+                $entry.SupportNote = $profile.SupportNote
+            }
+        }
+        elseif ($device.Mode -eq "Fastboot") {
+            $productResult = Invoke-ExternalTool -Executable $script:Fastboot -Arguments @("-s", $device.Serial, "getvar", "product")
+            $productLine = $productResult.Output | Where-Object { $_ -match 'product:' } | Select-Object -First 1
+            if ($productLine) { $entry.Product = $productLine.Trim() } else { $entry.Product = "Not reported" }
+            if (Get-Command Get-ManufacturerProfile -ErrorAction SilentlyContinue) {
+                $profile = Get-ManufacturerProfile -Product $entry.Product
+                $entry.ManufacturerFamily = $profile.ManufacturerFamily
+                $entry.SupportNote = $profile.SupportNote
+            }
+        }
+        $deviceReports += [pscustomobject]$entry
+    }
+
+    $windows = Get-CimInstance -ClassName Win32_OperatingSystem -ErrorAction SilentlyContinue
+    $adbVersion = if ($script:Adb) { (Invoke-ExternalTool -Executable $script:Adb -Arguments @("version")).Output -join " " } else { "Not found" }
+    $fastbootVersion = if ($script:Fastboot) { (Invoke-ExternalTool -Executable $script:Fastboot -Arguments @("--version")).Output -join " " } else { "Not found" }
+    $windowsText = [System.Environment]::OSVersion.VersionString
+    if ($windows) { $windowsText = "$($windows.Caption) ($($windows.Version))" }
+
+    $report = [pscustomobject]@{
+        Application = "FDTOOL V2"
+        ReportDate = (Get-Date).ToString("yyyy-MM-ddTHH:mm:ssK")
+        Computer = $env:COMPUTERNAME
+        Windows = $windowsText
+        PowerShell = $PSVersionTable.PSVersion.ToString()
+        ADB = $adbVersion
+        Fastboot = $fastbootVersion
+        DeviceCount = $deviceReports.Count
+        Devices = @($deviceReports)
+        Privacy = "Serial numbers masked by default. No personal files or account data collected."
+    }
+
+    $reportDirectory = Join-Path $script:Root "reports"
+    if (-not (Test-Path -LiteralPath $reportDirectory)) {
+        New-Item -ItemType Directory -Path $reportDirectory -Force | Out-Null
+    }
+    $fileName = "FDTOOL-Diagnostic-{0}.json" -f (Get-Date -Format "yyyyMMdd-HHmmss")
+    $reportPath = Join-Path $reportDirectory $fileName
+    $report | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath $reportPath -Encoding UTF8
+
+    Write-Host ""
+    Write-Host "  Informe guardado:" -ForegroundColor Green
+    Write-Host "  $reportPath"
+    Write-Host "  Identificadores de serie enmascarados." -ForegroundColor Green
+    Write-Host ""
+    [void](Read-Host "  Pulsa Enter para continuar")
+}
+
+$script:Adb = Resolve-Tool -Name "adb"
+$script:Fastboot = Resolve-Tool -Name "fastboot"
+
+while ($true) {
+    Write-Title
+    Write-Host ("  ADB:      {0}" -f $(if ($script:Adb) { "Disponible" } else { "No encontrado" })) -ForegroundColor $(if ($script:Adb) { "Green" } else { "Yellow" })
+    Write-Host ("  Fastboot: {0}" -f $(if ($script:Fastboot) { "Disponible" } else { "No encontrado" })) -ForegroundColor $(if ($script:Fastboot) { "Green" } else { "Yellow" })
+    Write-Host ""
+    Write-Host "  1. Detectar dispositivos (ADB / Fastboot)"
+    Write-Host "  2. Volver a comprobar herramientas"
+    Write-Host "  3. Generar informe de diagnóstico (JSON)"
+    Write-Host "  4. Gestionar aplicaciones preinstaladas (sin root)"
+    Write-Host "  5. Consultar procedimientos de servicio compatibles"
+    Write-Host "  6. Ver capacidades disponibles (Service Engine)"
+    Write-Host "  0. Salir"
+    Write-Host ""
+    $option = Read-Host "  Selecciona una opción"
+    if ($option -eq "0") { break }
+    switch ($option) {
+        "1" { Show-Scan }
+        "2" {
+            $script:Adb = Resolve-Tool -Name "adb"
+            $script:Fastboot = Resolve-Tool -Name "fastboot"
+        }
+        "3" { New-DiagnosticReport }
+        "4" { Start-PreinstalledAppManager }
+        "5" { Start-ServiceProcedureBrowser }
+        "6" { Start-ServiceCapabilityOverview }
+        default { Write-Host "  Opción no válida." -ForegroundColor Yellow; Start-Sleep -Seconds 1 }
+    }
+}
+) { return }
+    $index = [int]$choice - 1
+    if ($index -lt 0 -or $index -ge $devices.Count) {
+        Write-Host "  Selección no válida." -ForegroundColor Yellow
+        [void](Read-Host "  Pulsa Enter")
+        return
+    }
+
+    $selected = $devices[$index]
+    $profile = $null
+    $authorized = ($selected.Mode -eq "ADB" -and $selected.State -eq "device")
+    if ($authorized) {
+        $info = @{
+            Manufacturer = Get-AdbProperty -Serial $selected.Serial -Property "ro.product.manufacturer"
+            Brand = Get-AdbProperty -Serial $selected.Serial -Property "ro.product.brand"
+            Model = Get-AdbProperty -Serial $selected.Serial -Property "ro.product.model"
+            Product = Get-AdbProperty -Serial $selected.Serial -Property "ro.product.name"
+            Device = Get-AdbProperty -Serial $selected.Serial -Property "ro.product.device"
+            AndroidVersion = Get-AdbProperty -Serial $selected.Serial -Property "ro.build.version.release"
+            SDK = Get-AdbProperty -Serial $selected.Serial -Property "ro.build.version.sdk"
+            BuildFingerprint = Get-AdbProperty -Serial $selected.Serial -Property "ro.build.fingerprint"
+        }
+        $profile = Get-ManufacturerProfile @info
+    }
+    elseif ($selected.Mode -eq "Fastboot") {
+        $productResult = Invoke-ExternalTool -Executable $script:Fastboot -Arguments @("-s", $selected.Serial, "getvar", "product")
+        $productLine = $productResult.Output | Where-Object { $_ -match 'product:' } | Select-Object -First 1
+        $product = if ($productLine) { $productLine.Trim() } else { "" }
+        $profile = Get-ManufacturerProfile -Product $product
+    }
+    else {
+        $profile = Get-ManufacturerProfile
+    }
+
+    $catalogPath = Join-Path $script:Root "Data\\service-procedures.json"
+    $catalogAvailable = Test-Path -LiteralPath $catalogPath -PathType Leaf
+    $capabilities = @(Get-FdtoolServiceCapabilities -DeviceProfile $profile -ConnectionMode $selected.Mode -AdbAuthorized $authorized -FastbootAvailable ([bool]$script:Fastboot) -ServiceCatalogAvailable $catalogAvailable)
+
+    Write-Host ""
+    Write-Host ("  FDTOOL Service Engine | {0} | {1}" -f $profile.ManufacturerFamily, $profile.Model) -ForegroundColor Cyan
+    Write-Host ("  Conexión: {0} / {1} | Confianza: {2}" -f $selected.Mode, $selected.State, $profile.Confidence)
+    Write-Host ""
+    foreach ($capability in $capabilities) {
+        $color = if ($capability.Status -eq "available") { "Green" } elseif ($capability.Status -eq "available-with-confirmation") { "Yellow" } else { "DarkGray" }
+        Write-Host ("  [{0}] {1} — {2}" -f $capability.Status, $capability.Name, $capability.Risk) -ForegroundColor $color
+        Write-Host ("       {0}" -f $capability.Reason) -ForegroundColor DarkGray
+    }
+    Write-Host ""
+    Write-Host "  Nota: esta pantalla informa de capacidades; no ejecuta operaciones de servicio." -ForegroundColor Yellow
     [void](Read-Host "  Pulsa Enter para continuar")
 }
 
