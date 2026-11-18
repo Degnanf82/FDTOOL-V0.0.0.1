@@ -16,7 +16,14 @@ function Get-FdtoolHardwareProfile {
         "ro.product.board",
         "ro.build.fingerprint",
         "ro.product.model",
-        "ro.product.device"
+        "ro.product.device",
+        "ro.product.cpu.abi",
+        "ro.product.cpu.abilist",
+        "ro.build.version.security_patch",
+        "ro.bootloader",
+        "gsm.version.baseband",
+        "ro.build.id",
+        "ro.build.version.incremental"
     )
     $values = @{}
     foreach ($key in $keys) {
@@ -33,6 +40,13 @@ function Get-FdtoolHardwareProfile {
     $hardware = $values["ro.hardware"]
     $bootHardware = $values["ro.boot.hardware"]
     $board = $values["ro.product.board"]
+    $architecture = $values["ro.product.cpu.abi"]
+    $abiList = $values["ro.product.cpu.abilist"]
+    $securityPatch = $values["ro.build.version.security_patch"]
+    $bootloader = $values["ro.bootloader"]
+    $baseband = $values["gsm.version.baseband"]
+    $buildId = $values["ro.build.id"]
+    $buildIncremental = $values["ro.build.version.incremental"]
     $identity = (@($socManufacturer,$socModel,$platform,$hardware,$bootHardware,$board) -join " ").ToLowerInvariant()
 
     $vendor = "Unknown"
@@ -75,6 +89,13 @@ function Get-FdtoolHardwareProfile {
         PlatformId = $platformId
         BoardId = if ($board) { $board } else { "Not reported" }
         HardwareId = if ($hardware) { $hardware } else { "Not reported" }
+        CpuArchitecture = if ($architecture) { $architecture } else { "Not reported" }
+        SupportedAbis = if ($abiList) { $abiList } else { "Not reported" }
+        AndroidSecurityPatch = if ($securityPatch) { $securityPatch } else { "Not reported" }
+        BootloaderVersion = if ($bootloader) { $bootloader } else { "Not reported" }
+        BasebandVersion = if ($baseband) { $baseband } else { "Not reported" }
+        BuildId = if ($buildId) { $buildId } else { "Not reported" }
+        BuildIncremental = if ($buildIncremental) { $buildIncremental } else { "Not reported" }
         Confidence = $confidence
         MatchedBy = @($matchedBy)
         Evidence = "Android read-only system properties"
