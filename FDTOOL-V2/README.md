@@ -143,3 +143,8 @@ Run hardware intelligence tests:
 ```powershell
 pwsh -NoProfile -File .\\Tests\\Test-DeviceIntelligence.ps1
 ```
+
+
+## Extended hardware diagnostic report
+
+For authorized ADB devices, the JSON diagnostic report now includes a read-only hardware profile when Android exposes the relevant properties: SoC vendor/family, platform and board identifiers, CPU ABI(s), Android security patch level, bootloader and baseband versions, build ID and incremental build. Missing properties are explicitly reported as unavailable. Serial numbers remain masked. These identifiers support technician triage but do not establish firmware compatibility or prove component-level authenticity.
