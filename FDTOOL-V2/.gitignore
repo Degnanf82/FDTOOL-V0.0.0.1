@@ -1,0 +1,9 @@
+# Local platform tools binaries (download separately from official Android SDK sources)
+FDTOOL-V2/tools/platform-tools/*.exe
+FDTOOL-V2/tools/platform-tools/*.dll
+FDTOOL-V2/tools/platform-tools/*.so
+FDTOOL-V2/tools/platform-tools/*.dylib
+
+# Diagnostic exports and local logs
+FDTOOL-V2/reports/
+FDTOOL-V2/logs/

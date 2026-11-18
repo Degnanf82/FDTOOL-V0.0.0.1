@@ -1,0 +1,34 @@
+{
+  "schemaVersion": "1.0.0",
+  "catalogVersion": "0.1.0",
+  "generatedAt": "2026-11-17T00:00:00Z",
+  "expiresAt": "2027-02-15T00:00:00Z",
+  "procedures": [
+    {
+      "id": "generic.sim-lock.identification",
+      "title": "Identificación inicial de bloqueo de red",
+      "category": "sim-lock-diagnosis",
+      "status": "limited",
+      "match": { "manufacturers": ["Samsung", "Motorola", "Xiaomi", "Google", "Other"] },
+      "summary": "Recopila el modelo y los datos de software disponibles y guía una comprobación manual con una SIM de otro operador. No elimina el bloqueo.",
+      "requirements": ["Autorización del propietario", "Una SIM activa de otro operador", "Acceso a Ajustes del teléfono"],
+      "connection": "manual",
+      "steps": [
+        "Confirmar que el teléfono puede realizar llamadas de emergencia y que no existe un problema de cobertura.",
+        "Insertar una SIM activa de otro operador y anotar el mensaje exacto mostrado.",
+        "Registrar fabricante, modelo, país de compra y operador original.",
+        "Consultar el procedimiento oficial de desbloqueo del operador original."
+      ],
+      "limitations": [
+        "ADB y Fastboot no proporcionan un método universal para eliminar SIM Lock.",
+        "Un mensaje de SIM no válida no demuestra por sí solo que exista un bloqueo de red.",
+        "No se realizan escrituras en módem, NV, EFS, IMEI ni particiones."
+      ],
+      "source": {
+        "name": "FDTOOL V2 internal diagnostic workflow",
+        "url": "https://github.com/Degnanf82/FDTOOL-V0.0.0.1",
+        "checkedAt": "2026-11-17T00:00:00Z"
+      }
+    }
+  ]
+}
