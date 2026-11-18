@@ -10,6 +10,7 @@ on:
   pull_request:
     branches:
       - modernization/v2
+      - main
     paths:
       - "FDTOOL-V2/**"
 
