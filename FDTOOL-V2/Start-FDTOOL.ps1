@@ -16,6 +16,8 @@ $script:ServiceModulePath = Join-Path $script:Root "Modules\ServiceProcedures.ps
 if (Test-Path -LiteralPath $script:ServiceModulePath -PathType Leaf) { . $script:ServiceModulePath }
 $script:ServiceEnginePath = Join-Path $script:Root "Modules\ServiceEngine.ps1"
 if (Test-Path -LiteralPath $script:ServiceEnginePath -PathType Leaf) { . $script:ServiceEnginePath }
+$script:DeviceIntelligencePath = Join-Path $script:Root "Modules\DeviceIntelligence.ps1"
+if (Test-Path -LiteralPath $script:DeviceIntelligencePath -PathType Leaf) { . $script:DeviceIntelligencePath }
 $script:AppsModulePath = Join-Path $script:Root "Modules\PreinstalledApps.ps1"
 if (Test-Path -LiteralPath $script:AppsModulePath -PathType Leaf) { . $script:AppsModulePath }
 
@@ -332,15 +334,29 @@ function Start-ServiceCapabilityOverview {
             BuildFingerprint = Get-AdbProperty -Serial $selected.Serial -Property "ro.build.fingerprint"
         }
         $profile = Get-ManufacturerProfile @info
+        $hardwareProperties = @{
+            "ro.soc.manufacturer" = Get-AdbProperty -Serial $selected.Serial -Property "ro.soc.manufacturer"
+            "ro.soc.model" = Get-AdbProperty -Serial $selected.Serial -Property "ro.soc.model"
+            "ro.board.platform" = Get-AdbProperty -Serial $selected.Serial -Property "ro.board.platform"
+            "ro.hardware" = Get-AdbProperty -Serial $selected.Serial -Property "ro.hardware"
+            "ro.boot.hardware" = Get-AdbProperty -Serial $selected.Serial -Property "ro.boot.hardware"
+            "ro.product.board" = Get-AdbProperty -Serial $selected.Serial -Property "ro.product.board"
+            "ro.build.fingerprint" = $info.BuildFingerprint
+            "ro.product.model" = $info.Model
+            "ro.product.device" = $info.Device
+        }
+        $hardwareProfile = Get-FdtoolHardwareProfile -Properties $hardwareProperties
     }
     elseif ($selected.Mode -eq "Fastboot") {
         $productResult = Invoke-ExternalTool -Executable $script:Fastboot -Arguments @("-s", $selected.Serial, "getvar", "product")
         $productLine = $productResult.Output | Where-Object { $_ -match "product:" } | Select-Object -First 1
         $product = if ($productLine) { $productLine.Trim() } else { "" }
         $profile = Get-ManufacturerProfile -Product $product
+        $hardwareProfile = Get-FdtoolHardwareProfile -Properties @{}
     }
     else {
         $profile = Get-ManufacturerProfile
+        $hardwareProfile = Get-FdtoolHardwareProfile -Properties @{}
     }
 
     $catalogPath = Join-Path $script:Root "Data\service-procedures.json"
@@ -350,6 +366,10 @@ function Start-ServiceCapabilityOverview {
     Write-Host ""
     Write-Host ("  FDTOOL Service Engine | {0} | {1}" -f $profile.ManufacturerFamily, $profile.Model) -ForegroundColor Cyan
     Write-Host ("  Conexión: {0} / {1} | Confianza: {2}" -f $selected.Mode, $selected.State, $profile.Confidence)
+    Write-Host ("  Plataforma: {0} | SoC: {1}" -f $hardwareProfile.SoCVendor, $hardwareProfile.SoCModel)
+    Write-Host ("  Familia SoC: {0} | Confianza: {1}" -f $hardwareProfile.SoCFamily, $hardwareProfile.Confidence)
+    Write-Host ("  Identificador plataforma: {0}" -f $hardwareProfile.PlatformId)
+    Write-Host ("  Evidencia: {0}" -f $hardwareProfile.Evidence) -ForegroundColor DarkGray
     Write-Host ""
     foreach ($capability in $capabilities) {
         $color = if ($capability.Status -eq "available") { "Green" } elseif ($capability.Status -eq "available-with-confirmation") { "Yellow" } else { "DarkGray" }
