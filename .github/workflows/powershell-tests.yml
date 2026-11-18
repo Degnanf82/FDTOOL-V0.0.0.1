@@ -28,10 +28,12 @@ jobs:
             "FDTOOL-V2/Modules/PreinstalledApps.ps1",
             "FDTOOL-V2/Modules/ServiceProcedures.ps1",
             "FDTOOL-V2/Modules/ServiceEngine.ps1",
+            "FDTOOL-V2/Modules/DeviceIntelligence.ps1",
             "FDTOOL-V2/Tests/Test-DeviceProfiles.ps1",
             "FDTOOL-V2/Tests/Test-PreinstalledApps.ps1",
             "FDTOOL-V2/Tests/Test-ServiceProcedures.ps1",
-            "FDTOOL-V2/Tests/Test-ServiceEngine.ps1"
+            "FDTOOL-V2/Tests/Test-ServiceEngine.ps1",
+            "FDTOOL-V2/Tests/Test-DeviceIntelligence.ps1"
           )
           foreach ($file in $files) {
             $tokens = $null
@@ -57,3 +59,7 @@ jobs:
       - name: Run service engine capability tests
         shell: pwsh
         run: ./FDTOOL-V2/Tests/Test-ServiceEngine.ps1
+
+      - name: Run device intelligence tests
+        shell: pwsh
+        run: ./FDTOOL-V2/Tests/Test-DeviceIntelligence.ps1
