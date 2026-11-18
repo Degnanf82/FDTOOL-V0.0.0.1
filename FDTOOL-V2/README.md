@@ -1,6 +1,6 @@
 # FDTOOL V2 – Mobile Device Diagnostics
 
-A new, isolated modernization track for the original FDTOOL project. The legacy version remains unchanged on `main`.
+A modernized diagnostic toolkit for mobile-device service workflows. Development continues on `modernization/v2`; validated milestones are promoted to `main` through pull requests.
 
 ## Current status
 
