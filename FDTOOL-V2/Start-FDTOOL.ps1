@@ -418,6 +418,25 @@ function New-DiagnosticReport {
                 $entry.ManufacturerFamily = $profile.ManufacturerFamily
                 $entry.SupportNote = $profile.SupportNote
             }
+            $hardwareProperties = @{
+                "ro.soc.manufacturer" = Get-AdbProperty -Serial $device.Serial -Property "ro.soc.manufacturer"
+                "ro.soc.model" = Get-AdbProperty -Serial $device.Serial -Property "ro.soc.model"
+                "ro.board.platform" = Get-AdbProperty -Serial $device.Serial -Property "ro.board.platform"
+                "ro.hardware" = Get-AdbProperty -Serial $device.Serial -Property "ro.hardware"
+                "ro.boot.hardware" = Get-AdbProperty -Serial $device.Serial -Property "ro.boot.hardware"
+                "ro.product.board" = Get-AdbProperty -Serial $device.Serial -Property "ro.product.board"
+                "ro.product.cpu.abi" = Get-AdbProperty -Serial $device.Serial -Property "ro.product.cpu.abi"
+                "ro.product.cpu.abilist" = Get-AdbProperty -Serial $device.Serial -Property "ro.product.cpu.abilist"
+                "ro.build.version.security_patch" = Get-AdbProperty -Serial $device.Serial -Property "ro.build.version.security_patch"
+                "ro.bootloader" = Get-AdbProperty -Serial $device.Serial -Property "ro.bootloader"
+                "gsm.version.baseband" = Get-AdbProperty -Serial $device.Serial -Property "gsm.version.baseband"
+                "ro.build.id" = Get-AdbProperty -Serial $device.Serial -Property "ro.build.id"
+                "ro.build.version.incremental" = Get-AdbProperty -Serial $device.Serial -Property "ro.build.version.incremental"
+                "ro.build.fingerprint" = $entry.BuildFingerprint
+                "ro.product.model" = $entry.Model
+                "ro.product.device" = $entry.Device
+            }
+            $entry.HardwareProfile = Get-FdtoolHardwareProfile -Properties $hardwareProperties
         }
         elseif ($device.Mode -eq "Fastboot") {
             $productResult = Invoke-ExternalTool -Executable $script:Fastboot -Arguments @("-s", $device.Serial, "getvar", "product")
