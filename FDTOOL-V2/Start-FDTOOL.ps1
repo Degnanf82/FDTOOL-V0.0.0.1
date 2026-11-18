@@ -480,6 +480,7 @@ while ($true) {
     Write-Host "  3. Generar informe de diagnóstico (JSON)"
     Write-Host "  4. Gestionar aplicaciones preinstaladas (sin root)"
     Write-Host "  5. Consultar procedimientos de servicio compatibles"
+    Write-Host "  6. Ver capacidades disponibles (Service Engine)"
     Write-Host "  0. Salir"
     Write-Host ""
     $option = Read-Host "  Selecciona una opción"
@@ -493,6 +494,7 @@ while ($true) {
         "3" { New-DiagnosticReport }
         "4" { Start-PreinstalledAppManager }
         "5" { Start-ServiceProcedureBrowser }
+        "6" { Start-ServiceCapabilityOverview }
         default { Write-Host "  Opción no válida." -ForegroundColor Yellow; Start-Sleep -Seconds 1 }
     }
 }
