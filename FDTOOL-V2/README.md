@@ -1,6 +1,6 @@
 # FDTOOL V2 – Mobile Device Diagnostics
 
-A new, isolated modernization track for the original FDTOOL project. The legacy version remains unchanged on `main`.
+A modernized diagnostic toolkit for mobile-device service workflows. Development continues on `modernization/v2`; validated milestones are promoted to `main` through pull requests.
 
 ## Current status
 
@@ -116,4 +116,30 @@ Run matcher tests:
 
 ```powershell
 pwsh -NoProfile -File .\Tests\Test-ServiceProcedures.ps1
+```
+
+
+## Central Service Engine (first implementation)
+
+Menu option 6 shows a capability matrix for the selected ADB/Fastboot connection. It combines the detected manufacturer profile, connection authorization and local service-catalog availability to distinguish available, confirmation-required, unavailable and planned capabilities.
+
+The engine is deliberately descriptive in this stage: it does not execute service procedures. Android diagnostics and application inventory are read-only; user-level app management is marked moderate risk and requires package-by-package confirmation. Manufacturer-specific advanced operations remain planned until exact model, regional variant, compatibility evidence and safe implementation are verified.
+
+Run the Service Engine tests:
+
+```powershell
+pwsh -NoProfile -File .\\Tests\\Test-ServiceEngine.ps1
+```
+
+
+## Device Intelligence Engine (initial platform identification)
+
+The read-only hardware profile examines Android system properties when ADB is authorized. It can infer likely platform families such as Qualcomm Snapdragon, MediaTek Dimensity/Helio, Samsung Exynos, Google Tensor, UNISOC, HiSilicon Kirin and Broadcom when exposed by the device.
+
+The launcher capability overview now displays the inferred SoC vendor/family, reported model, platform identifier and confidence. Some manufacturers hide or omit these properties, so unknown results are valid. The engine never treats a family inference as proof of exact chipset, board revision or firmware compatibility.
+
+Run hardware intelligence tests:
+
+```powershell
+pwsh -NoProfile -File .\\Tests\\Test-DeviceIntelligence.ps1
 ```
